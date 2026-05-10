@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Confirm Booking</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="styles.css">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/images/bookapp-icon.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/images/bookapp-icon.png">
+<meta name="theme-color" content="#000000">
+</head>
+
+<body>
+
+  <div class="logo-wrap">
+    <img src="r4ar.png" alt="Raving 4 A Reason" class="logo">
+  </div>
+
+  <div class="container">
+
+    <h1>Confirm Your Booking</h1>
+
+    <div id="bookingDetails" class="slot-card"></div>
+
+    <input type="text" id="childName" placeholder="Child Name">
+    <input type="text" id="parentName" placeholder="Parent Name">
+    <input type="tel" id="parentPhone" placeholder="Phone Number">
+    <input type="email" id="email" placeholder="Email Address">
+
+    <label class="gdpr-box">
+      <input type="checkbox" id="gdprConsent">
+      <span>
+        I consent to Raving 4 A Reason storing my details for booking and communication purposes only. My information will not be used for marketing or shared with third parties.
+      </span>
+    </label>
+
+    <button onclick="confirmBooking()">CONFIRM BOOKING</button>
+    <button onclick="goBack()" class="secondary">BACK</button>
+
+  </div>
+
+  <footer>
+    Raving 4 A Reason CIC | C.I.C REG 16251433
+  </footer>
+
+  <script src="data.js"></script>
+
+  <!-- ✅ Load Supabase -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <!-- ✅ Then your app -->
+  <script src="app.js"></script>
+
+</body>
+</html>

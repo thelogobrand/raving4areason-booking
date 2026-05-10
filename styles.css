@@ -1,0 +1,295 @@
+/* ===== RESET ===== */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: Arial, sans-serif;
+}
+
+/* ===== BODY ===== */
+body {
+  background: #000;
+  color: #fff;
+  text-align: center;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ===== CONTAINER ===== */
+.container {
+  flex: 1;
+  padding: 20px;
+  max-width: 500px;
+  margin: auto;
+}
+
+/* ===== LOGO ===== */
+.logo-wrap {
+  padding-top: 20px;
+  text-align: center;
+}
+
+.logo {
+  width: 140px;
+  max-width: 60%;
+  margin-bottom: 10px;
+  filter: drop-shadow(0 0 6px rgba(255, 215, 0, 0.4));
+}
+
+/* ===== HEADINGS ===== */
+h1 {
+  font-size: 28px;
+  margin-bottom: 20px;
+}
+
+h2 {
+  margin: 20px 0 10px;
+  font-size: 20px;
+}
+
+/* ===== INPUTS & SELECTS ===== */
+input,
+select {
+  display: block;
+  width: 90%;
+  max-width: 340px;
+  margin: 10px auto;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid #333;
+  background: #111;
+  color: #fff;
+  font-size: 16px;
+  outline: none;
+}
+
+input[type="date"] {
+  color: #ffffff;
+  color-scheme: dark;
+  text-align: center;
+  padding: 0 12px;
+  height: 50px;
+  line-height: normal;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+input[type="date"] {
+  color: #ffffff;
+  color-scheme: dark;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+}
+
+.field-label {
+  display: block;
+  width: 90%;
+  max-width: 340px;
+  margin: 10px auto 4px;
+  text-align: left;
+  font-size: 13px;
+  color: #ffd700;
+}
+
+input::placeholder {
+  color: #777;
+}
+
+/* ===== BUTTONS ===== */
+button {
+  display: block;
+  width: 90%;
+  max-width: 340px;
+  margin: 12px auto;
+  padding: 14px;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  color: #fff;
+  border: 2px solid transparent;
+  background:
+    linear-gradient(#d00000, #a00000) padding-box,
+    linear-gradient(90deg, #d4af37, #ffd700, #b8962e) border-box;
+  box-shadow: 0 0 12px rgba(212, 175, 55, 0.35);
+  transition: 0.2s ease;
+}
+
+button.secondary {
+  background:
+    linear-gradient(#0f0f0f, #1a1a1a) padding-box,
+    linear-gradient(90deg, #d4af37, #ffd700, #b8962e) border-box;
+  color: #fff;
+}
+
+button:hover {
+  transform: scale(1.02);
+  box-shadow: 0 0 18px rgba(255, 215, 0, 0.5);
+}
+
+button:active {
+  transform: scale(0.98);
+}
+
+/* ===== SLOT CARD ===== */
+.slot-card {
+  background: #111;
+  border-radius: 12px;
+  padding: 15px;
+  margin: 12px 0;
+  border: 1px solid #222;
+  text-align: center;
+}
+
+.slot-card p {
+  margin: 5px 0;
+}
+
+/* ===== DAY HEADINGS ===== */
+.day-heading {
+  margin-top: 25px;
+  font-size: 18px;
+  color: #ffd700;
+}
+
+/* ===== SEARCH RESULTS ===== */
+#searchResults {
+  margin-top: 20px;
+}
+
+/* ===== TEXT ===== */
+p {
+  margin: 8px 0;
+}
+
+/* ===== FOOTER ===== */
+footer {
+  padding: 15px;
+  font-size: 12px;
+  color: #888;
+}
+
+/* ===== LOGIN ===== */
+#loginBox {
+  margin-top: 40px;
+}
+
+#adminPanel {
+  margin-top: 20px;
+}
+
+/* ===== ADMIN GROUPS ===== */
+.admin-group {
+  margin: 28px 0;
+  padding: 16px 0;
+  border-top: 1px solid rgba(255, 215, 0, 0.25);
+}
+
+.admin-group h2 {
+  color: #ffd700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-size: 18px;
+  margin-bottom: 14px;
+  text-align: center;
+}
+
+#slotsSection,
+#bookedSection,
+#addSessionSection,
+#mentorsSection,
+#addMentorSection,
+#locationsSection,
+#addLocationSection,
+#membersSection,
+#addMemberSection {
+  margin: 12px 0 18px;
+}
+
+/* ===== GDPR CHECKBOX ===== */
+.gdpr-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 90%;
+  max-width: 340px;
+  margin: 14px auto;
+  text-align: left;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.gdpr-box input {
+  width: auto;
+  margin: 3px 0 0;
+  flex-shrink: 0;
+}
+
+/* ===== PAID CHECKBOX ===== */
+.paid-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 12px auto;
+  font-size: 14px;
+}
+
+.paid-box input {
+  width: auto;
+  margin: 0;
+}
+
+/* ===== LOGOUT ===== */
+.logout-section {
+  margin-top: 40px;
+  text-align: center;
+}
+
+.logout-divider {
+  width: 60%;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.2);
+  margin: 40px auto 20px;
+}
+
+.logout-btn {
+  width: auto;
+  max-width: none;
+  padding: 8px 18px;
+  background: transparent;
+  color: #ffffff;
+  border: 1px solid rgba(255,255,255,0.4);
+  border-radius: 20px;
+  font-size: 13px;
+  display: block;
+  margin: 0 auto 30px;
+  letter-spacing: 1px;
+  box-shadow: none;
+}
+
+.logout-btn:hover {
+  background: rgba(255,255,255,0.1);
+  border-color: #ffffff;
+  box-shadow: none;
+}
+
+/* ===== MOBILE ===== */
+@media (max-width: 480px) {
+  h1 {
+    font-size: 24px;
+  }
+
+  button {
+    font-size: 15px;
+    padding: 12px;
+  }
+
+  .logo {
+    width: 120px;
+  }
+}
