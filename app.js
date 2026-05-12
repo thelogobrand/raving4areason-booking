@@ -778,15 +778,16 @@ async function addMentor() {
   const name = document.getElementById("newMentorName")?.value.trim() || "";
   const type = document.getElementById("newMentorType")?.value || "";
   const location = document.getElementById("newMentorLocation")?.value.trim() || "";
+  const email = document.getElementById("newMentorEmail")?.value.trim() || "";
 
-  if (!name || !type || !location) {
-    alert("Please fill all mentor fields");
-    return;
+  if (!name || !email || !type || !location) {
+  alert("Please fill all mentor fields");
+  return;
   }
 
   const { error } = await db
     .from("mentors")
-    .insert([{ name, type, location }]);
+    .insert([{ name, email, type, location }]);
 
   if (error) {
     console.error(error);
@@ -812,6 +813,7 @@ async function addMentor() {
   document.getElementById("newMentorName").value = "";
   document.getElementById("newMentorType").value = "";
   document.getElementById("newMentorLocation").value = "";
+  document.getElementById("newMentorEmail").value = "";
 }
 
 async function renderAdminMentors() {
