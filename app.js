@@ -491,42 +491,78 @@ async function loadSearchFilters() {
 
   if (!mentorSelect || !locationSelect || !typeSelect) return;
 
-  const { data: mentorsData, error: mentorError } = await db
-    .from("mentors")
-    .select("*")
-    .order("name", { ascending: true });
-
-  const { data: locationsData, error: locationError } = await db
-    .from("locations")
-    .select("*")
-    .order("name", { ascending: true });
-
-  if (mentorError || locationError) {
-    console.error(mentorError || locationError);
-    return;
-  }
-
   const selectedType = typeSelect.value;
   const currentMentor = mentorSelect.value;
   const currentLocation = locationSelect.value;
 
-  mentorSelect.innerHTML = '<option value="">All Mentors</option>';
-  locationSelect.innerHTML = '<option value="">All Locations</option>';
+  let query = db
+    .from("sessions")
+    .select("mentor, location, type")
+    .gte("date", getTodayDate());
 
-  const filteredMentors = selectedType
-    ? mentorsData.filter(m => m.type === selectedType)
-    : mentorsData;
+  if (selectedType) {
+    query = query.eq("type", selectedType);
+  }
 
-  filteredMentors.forEach(mentor => {
-    mentorSelect.innerHTML += `<option value="${mentor.name}">${mentor.name}</option>`;
+  const { data, error } = await query;
+
+  if (error) {
+    console.error("Error loading booking filters:", error);
+
+    mentorSelect.innerHTML =
+      '<option value="">Unable to load mentors</option>';
+
+    locationSelect.innerHTML =
+      '<option value="">Unable to load locations</option>';
+
+    return;
+  }
+
+  const sessions = data || [];
+
+  const mentors = [
+    ...new Set(
+      sessions
+        .map(session => session.mentor)
+        .filter(Boolean)
+    )
+  ].sort();
+
+  const locations = [
+    ...new Set(
+      sessions
+        .map(session => session.location)
+        .filter(Boolean)
+    )
+  ].sort();
+
+  mentorSelect.innerHTML =
+    '<option value="">All Mentors</option>';
+
+  locationSelect.innerHTML =
+    '<option value="">All Locations</option>';
+
+  mentors.forEach(mentor => {
+    const option = document.createElement("option");
+    option.value = mentor;
+    option.textContent = mentor;
+    mentorSelect.appendChild(option);
   });
 
-  locationsData.forEach(location => {
-    locationSelect.innerHTML += `<option value="${location.name}">${location.name}</option>`;
+  locations.forEach(location => {
+    const option = document.createElement("option");
+    option.value = location;
+    option.textContent = location;
+    locationSelect.appendChild(option);
   });
 
-  mentorSelect.value = currentMentor;
-  locationSelect.value = currentLocation;
+  if (mentors.includes(currentMentor)) {
+    mentorSelect.value = currentMentor;
+  }
+
+  if (locations.includes(currentLocation)) {
+    locationSelect.value = currentLocation;
+  }
 
   typeSelect.onchange = loadSearchFilters;
 }
