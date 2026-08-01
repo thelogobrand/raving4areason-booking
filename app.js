@@ -7,8 +7,6 @@ const ADMIN_USERNAME = "admin";
 const ADMIN_PASSWORD = "R4AR";
 const MENTOR_PASSWORD = "Mentor";
 
-let members = JSON.parse(localStorage.getItem("members")) || [];
-
 /* =========================
    HELPERS
 ========================= */
@@ -55,10 +53,6 @@ function toggleSection(sectionId) {
       : "none";
 }
 
-function saveMembers() {
-  localStorage.setItem("members", JSON.stringify(members));
-}
-
 /* =========================
    ADMIN LOGIN
 ========================= */
@@ -93,6 +87,7 @@ function showAdminPanel() {
   renderAdminMentors();
   renderAdminLocations();
   renderMembers();
+  loadDashboard();
 }
 
 function showLoginBox() {
@@ -207,6 +202,80 @@ function checkMentorLogin() {
   } else {
     showMentorLoginBox();
   }
+}
+
+/* =========================
+   ADMIN DASHBOARD
+========================= */
+
+async function loadDashboard() {
+  const container = document.getElementById("dashboardSummary");
+  if (!container) return;
+
+  container.innerHTML = '<p class="loading-text">Loading dashboard…</p>';
+
+  const today = getTodayDate();
+
+  const [
+    membersResult,
+    mentorsResult,
+    locationsResult,
+    sessionsResult,
+    bookingsResult
+  ] = await Promise.all([
+    db.from("members").select("type"),
+    db.from("mentors").select("id", { count: "exact", head: true }),
+    db.from("locations").select("id", { count: "exact", head: true }),
+    db.from("sessions").select("id", { count: "exact", head: true }).gte("date", today),
+    db.from("bookings").select("id", { count: "exact", head: true }).gte("date", today)
+  ]);
+
+  const firstError = [
+    membersResult.error,
+    mentorsResult.error,
+    locationsResult.error,
+    sessionsResult.error,
+    bookingsResult.error
+  ].find(Boolean);
+
+  if (firstError) {
+    console.error("Dashboard error:", firstError);
+    container.innerHTML = '<p class="error-text">Unable to load dashboard totals.</p>';
+    return;
+  }
+
+  const membersData = membersResult.data || [];
+  const memberTypes = membersData.reduce((totals, member) => {
+    const type = member.type || "Other";
+    totals[type] = (totals[type] || 0) + 1;
+    return totals;
+  }, {});
+
+  const cards = [
+    { label: "Members", value: membersData.length, icon: "👥" },
+    { label: "Mentors", value: mentorsResult.count || 0, icon: "🎧" },
+    { label: "Available Sessions", value: sessionsResult.count || 0, icon: "📅" },
+    { label: "Upcoming Bookings", value: bookingsResult.count || 0, icon: "📝" },
+    { label: "Locations", value: locationsResult.count || 0, icon: "📍" },
+    { label: "Lessons Paid", value: memberTypes["Lessons Paid"] || 0, icon: "💷", type: "Lessons Paid" },
+    { label: "Lessons Funded", value: memberTypes["Lessons Funded"] || 0, icon: "💙", type: "Lessons Funded" },
+    { label: "Membership", value: memberTypes.Membership || 0, icon: "⭐", type: "Membership" },
+    { label: "Part Funded", value: memberTypes["Part Funded"] || 0, icon: "🟠", type: "Part Funded" },
+    { label: "Other", value: memberTypes.Other || 0, icon: "⚪", type: "Other" }
+  ].filter(card => card.value > 0);
+
+  if (cards.length === 0) {
+    container.innerHTML = '<p>No dashboard data yet.</p>';
+    return;
+  }
+
+  container.innerHTML = cards.map(card => `
+    <div class="dashboard-card${card.type ? " funding-card" : ""}">
+      <span class="dashboard-icon">${card.icon}</span>
+      <strong>${card.value}</strong>
+      <span>${card.label}</span>
+    </div>
+  `).join("");
 }
 
 /* =========================
@@ -365,6 +434,7 @@ async function addSlot() {
 
   renderAdminSlots();
   loadCalendar();
+  loadDashboard();
 
   document.getElementById("date").value = "";
   document.getElementById("type").value = "";
@@ -391,6 +461,7 @@ async function removeSlot(id) {
   renderAdminSlots();
   loadCalendar();
   renderMentorAvailability();
+  loadDashboard();
 }
 
 async function removeBookedSlot(booking) {
@@ -808,6 +879,7 @@ async function addMentor() {
   renderAdminMentors();
   renderAdminLocations();
   loadAdminDropdowns();
+  loadDashboard();
   loadSearchFilters();
 
   document.getElementById("newMentorName").value = "";
@@ -863,6 +935,7 @@ async function removeMentor(id) {
   renderAdminMentors();
   loadAdminDropdowns();
   loadSearchFilters();
+  loadDashboard();
 }
 
 async function addLocation() {
@@ -895,6 +968,7 @@ async function addLocation() {
   renderAdminLocations();
   loadAdminDropdowns();
   loadSearchFilters();
+  loadDashboard();
 
   document.getElementById("newLocationName").value = "";
 }
@@ -943,6 +1017,7 @@ async function removeLocation(id) {
   renderAdminLocations();
   loadAdminDropdowns();
   loadSearchFilters();
+  loadDashboard();
 }
 
 /* =========================
@@ -1003,6 +1078,7 @@ async function togglePaid(id, currentStatus) {
   }
 
   renderBookedSessions();
+  loadDashboard();
 }
 
 async function removeBookedSession(id) {
@@ -1019,6 +1095,7 @@ async function removeBookedSession(id) {
 
   renderBookedSessions();
   renderMentorBookedSessions();
+  loadDashboard();
 }
 
 async function renderMentorBookedSessions() {
@@ -1123,6 +1200,7 @@ async function addMentorAvailability() {
   renderMentorAvailability();
   renderAdminSlots();
   loadCalendar();
+  loadDashboard();
 
   document.getElementById("mentorDate").value = "";
   document.getElementById("mentorLocation").value = "";
@@ -1180,49 +1258,153 @@ async function removeMentorAvailability(id) {
   renderMentorAvailability();
   renderAdminSlots();
   loadCalendar();
+  loadDashboard();
 }
 
 /* =========================
    MEMBERS
 ========================= */
 
-function addMember() {
-  const child = document.getElementById("memberChild")?.value.trim() || "";
+let membersCache = [];
 
-  if (!child) {
-    alert("Please enter member name");
+async function addMember() {
+  const name = document.getElementById("memberName")?.value.trim() || "";
+  const djMcName = document.getElementById("memberDjMcName")?.value.trim() || "";
+  const type = document.getElementById("memberType")?.value || "";
+
+  if (!name || !type) {
+    alert("Please enter the member name and select a type");
     return;
   }
 
-  members.push({ child });
-  saveMembers();
-  renderMembers();
+  const { error } = await db
+    .from("members")
+    .insert([{
+      name,
+      dj_mc_name: djMcName || null,
+      type
+    }]);
 
-  document.getElementById("memberChild").value = "";
+  if (error) {
+    console.error("Error adding member:", error);
+    alert("Error adding member");
+    return;
+  }
+
+  document.getElementById("memberName").value = "";
+  document.getElementById("memberDjMcName").value = "";
+  document.getElementById("memberType").value = "";
+
+  await renderMembers();
+  await loadDashboard();
 }
 
-function renderMembers() {
+async function renderMembers() {
   const container = document.getElementById("adminMembers");
   if (!container) return;
 
-  let html = "";
+  const { data, error } = await db
+    .from("members")
+    .select("*")
+    .order("name", { ascending: true });
 
-  members.forEach((m, index) => {
-    html += `
-      <div class="slot-card">
-        <p><strong>${m.child}</strong></p>
-        <button onclick="removeMember(${index})">REMOVE</button>
-      </div>
-    `;
-  });
+  if (error) {
+    console.error("Error loading members:", error);
+    container.innerHTML = '<p class="error-text">Error loading members.</p>';
+    return;
+  }
 
-  container.innerHTML = html || "<p>No members yet.</p>";
+  membersCache = data || [];
+  filterMembers();
 }
 
-function removeMember(index) {
-  members.splice(index, 1);
-  saveMembers();
-  renderMembers();
+function filterMembers() {
+  const container = document.getElementById("adminMembers");
+  if (!container) return;
+
+  const search = (document.getElementById("memberSearch")?.value || "")
+    .trim()
+    .toLowerCase();
+  const typeFilter = document.getElementById("memberTypeFilter")?.value || "";
+
+  const filtered = membersCache.filter(member => {
+    const name = (member.name || "").toLowerCase();
+    const djMcName = (member.dj_mc_name || "").toLowerCase();
+    const matchesSearch = !search || name.includes(search) || djMcName.includes(search);
+    const matchesType = !typeFilter || member.type === typeFilter;
+    return matchesSearch && matchesType;
+  });
+
+  if (filtered.length === 0) {
+    container.innerHTML = '<p>No matching members found.</p>';
+    return;
+  }
+
+  container.innerHTML = filtered.map(member => `
+    <div class="member-card">
+      <div class="member-card-header">
+        <div>
+          <h3>${escapeHtml(member.name || "Unnamed member")}</h3>
+          ${member.dj_mc_name
+            ? `<p class="member-alias">DJ / MC Name: ${escapeHtml(member.dj_mc_name)}</p>`
+            : ""}
+        </div>
+        <span class="member-type-badge ${getMemberTypeClass(member.type)}">
+          ${escapeHtml(member.type || "Other")}
+        </span>
+      </div>
+      <div class="member-card-footer">
+        <span>Added ${formatShortDate(member.created_at)}</span>
+        <button class="small-danger-btn" onclick="removeMember('${member.id}')">DELETE</button>
+      </div>
+    </div>
+  `).join("");
+}
+
+async function removeMember(id) {
+  const confirmDelete = confirm("Remove this member?");
+  if (!confirmDelete) return;
+
+  const { error } = await db
+    .from("members")
+    .delete()
+    .eq("id", id);
+
+  if (error) {
+    console.error("Error removing member:", error);
+    alert("Error removing member");
+    return;
+  }
+
+  await renderMembers();
+  await loadDashboard();
+}
+
+function formatShortDate(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleDateString("en-GB");
+}
+
+function getMemberTypeClass(type) {
+  const classes = {
+    "Lessons Paid": "type-paid",
+    "Lessons Funded": "type-funded",
+    "Membership": "type-membership",
+    "Part Funded": "type-part-funded",
+    "Other": "type-other"
+  };
+  return classes[type] || "type-other";
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
 /* =========================
@@ -1236,6 +1418,12 @@ window.onload = () => {
   loadSearchFilters();
   checkAdminLogin();
   checkMentorLogin();
+
+  const memberSearch = document.getElementById("memberSearch");
+  const memberTypeFilter = document.getElementById("memberTypeFilter");
+
+  if (memberSearch) memberSearch.addEventListener("input", filterMembers);
+  if (memberTypeFilter) memberTypeFilter.addEventListener("change", filterMembers);
 
   const phoneInput = document.getElementById("parentPhone");
 
