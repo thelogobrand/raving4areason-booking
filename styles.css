@@ -293,3 +293,189 @@ footer {
     width: 120px;
   }
 }
+/* ===== ADMIN V2 DASHBOARD ===== */
+.admin-container {
+  max-width: 760px;
+  width: 100%;
+}
+
+.dashboard-group {
+  border-top: none;
+  padding-top: 0;
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.dashboard-card {
+  min-height: 116px;
+  padding: 16px 10px;
+  border: 1px solid rgba(255, 215, 0, 0.28);
+  border-radius: 14px;
+  background: linear-gradient(145deg, #171717, #0c0c0c);
+  box-shadow: 0 0 14px rgba(212, 175, 55, 0.12);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+
+.dashboard-card strong {
+  font-size: 28px;
+  color: #ffd700;
+}
+
+.dashboard-card > span:last-child {
+  font-size: 12px;
+  line-height: 1.25;
+  color: #ddd;
+}
+
+.dashboard-icon {
+  font-size: 22px;
+}
+
+.funding-card {
+  min-height: 98px;
+}
+
+.loading-text,
+.error-text {
+  grid-column: 1 / -1;
+  padding: 12px;
+}
+
+.error-text {
+  color: #ff8b8b;
+}
+
+/* ===== ADMIN PANELS ===== */
+.admin-section {
+  margin: 12px auto 20px;
+}
+
+.form-panel {
+  padding: 12px 0 4px;
+  background: rgba(255, 255, 255, 0.025);
+  border-radius: 14px;
+}
+
+/* ===== MEMBER TOOLS ===== */
+.member-tools {
+  margin: 12px 0 18px;
+  padding: 14px 8px;
+  border: 1px solid #252525;
+  border-radius: 14px;
+  background: #0d0d0d;
+}
+
+.member-tools input,
+.member-tools select {
+  width: 100%;
+  max-width: none;
+}
+
+.member-card {
+  margin: 12px 0;
+  padding: 16px;
+  border: 1px solid #262626;
+  border-radius: 14px;
+  background: #111;
+  text-align: left;
+}
+
+.member-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.member-card h3 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.member-alias {
+  margin-top: 6px;
+  color: #bdbdbd;
+  font-size: 13px;
+}
+
+.member-type-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: bold;
+  white-space: nowrap;
+  color: #fff;
+  background: #444;
+}
+
+.type-paid { background: #176b39; }
+.type-funded { background: #175b91; }
+.type-membership { background: #6b3fa0; }
+.type-part-funded { background: #9a5319; }
+.type-other { background: #555; }
+
+.member-card-footer {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid #242424;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #888;
+  font-size: 12px;
+}
+
+.small-danger-btn {
+  width: auto;
+  max-width: none;
+  margin: 0;
+  padding: 7px 12px;
+  border: 1px solid rgba(255, 100, 100, 0.55);
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: none;
+  color: #ff9b9b;
+  font-size: 11px;
+}
+
+.small-danger-btn:hover {
+  background: rgba(255, 90, 90, 0.1);
+  box-shadow: none;
+}
+
+@media (min-width: 620px) {
+  .dashboard-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 480px) {
+  .admin-container {
+    padding: 14px;
+  }
+
+  .dashboard-card {
+    min-height: 105px;
+  }
+
+  .member-card-header {
+    flex-direction: column;
+  }
+
+  .member-card-footer {
+    align-items: flex-end;
+  }
+}
