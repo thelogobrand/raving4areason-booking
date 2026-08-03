@@ -46,6 +46,8 @@
           <div id="adminBookedSessions"></div>
         </div>
 
+        <button onclick="bookForParent()" class="admin-assist-btn">BOOK SESSION FOR PARENT</button>
+
         <button onclick="toggleSection('addSessionSection')" class="secondary">ADD SESSION</button>
         <div id="addSessionSection" class="admin-section form-panel" style="display:none;">
           <label class="field-label" for="date">Date</label>
@@ -150,6 +152,38 @@
         </div>
       </div>
 
+      <div class="admin-group">
+        <h2>MESSAGES</h2>
+        <button onclick="toggleSection('adminMessagesSection'); renderAdminMessages();" class="secondary">MESSAGE CENTRE <span id="adminMessageBadge" class="badge" style="display:none;"></span></button>
+        <div id="adminMessagesSection" class="admin-section" style="display:none;"><div id="adminMessageThreads"></div></div>
+      </div>
+
+      <div class="admin-group">
+        <h2>NEWSLETTER</h2>
+        <button onclick="toggleSection('newsletterAdminSection'); renderNewsletterAdmin();" class="secondary">MANAGE NEWSLETTERS</button>
+        <div id="newsletterAdminSection" class="admin-section form-panel" style="display:none;">
+          <input type="text" id="newsletterTitle" placeholder="Newsletter Title">
+          <label class="field-label" for="newsletterPublishedDate">Published Date</label>
+          <input type="date" id="newsletterPublishedDate">
+          <input type="file" id="newsletterFile" accept="application/pdf">
+          <button onclick="uploadNewsletter()">UPLOAD NEWSLETTER</button>
+          <div id="adminNewsletterList"></div>
+        </div>
+      </div>
+
+
+      <div class="admin-group">
+        <h2>SECURITY</h2>
+        <button onclick="toggleSection('securitySection'); renderSecurityMentors();" class="secondary">PASSWORD SETTINGS</button>
+        <div id="securitySection" class="admin-section form-panel" style="display:none;">
+          <button onclick="changePortalPassword('parent')">CHANGE PARENT PASSWORD</button>
+          <button onclick="changePortalPassword('admin')" class="secondary">CHANGE ADMIN PASSWORD</button>
+          <h3 class="security-heading">Mentor Passwords</h3>
+          <p class="small-help">Reset an individual mentor password. The mentor keeps the same login name.</p>
+          <div id="securityMentorList"></div>
+        </div>
+      </div>
+
       <div class="logout-section">
         <div class="logout-divider"></div>
         <button onclick="logoutAdmin()" class="logout-btn">LOG OUT</button>
@@ -161,6 +195,7 @@
 
   <script src="data.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
