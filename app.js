@@ -6,6 +6,10 @@ const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 const ADMIN_USERNAME = "admin";
 const ADMIN_PASSWORD = "R4AR";
 const MENTOR_PASSWORD = "Mentor";
+const PARENT_USERNAME = "R4ARparent";
+const DONATION_URL = "https://www.gofundme.com/f/buy-more-equipment-for-young-peoples-workshops-worksh?attribution_id=sl:e5544b21-38bf-4f5d-9b45-75d32cf8ef34&lang=en_GB&utm_campaign=fp_sharesheet&utm_medium=customer&utm_source=qr_code";
+let currentManagedBooking = null;
+let currentManagedMessages = [];
 
 /* =========================
    HELPERS
@@ -13,6 +17,12 @@ const MENTOR_PASSWORD = "Mentor";
 
 function getTodayDate() {
   return new Date().toISOString().split("T")[0];
+}
+
+function createBookingReference() {
+  const year = new Date().getFullYear();
+  const code = crypto.getRandomValues(new Uint32Array(1))[0].toString().slice(-6).padStart(6, "0");
+  return `R4AR-${year}-${code}`;
 }
 
 function formatDisplayDate(dateString) {
@@ -39,8 +49,23 @@ function goToCalendar() {
   window.location.href = "weekly-calendar.html";
 }
 
-function goToBooking() {
-  window.location.href = "book.html";
+function goToBooking() { window.location.href = "book.html"; }
+function goToNewsletter() { window.location.href = "newsletter.html"; }
+function goToContact() { window.location.href = "contact.html"; }
+function openDonationPage() {
+  if (!DONATION_URL || DONATION_URL === "PASTE_DONATION_LINK_HERE") {
+    alert("The donation link has not been added yet.");
+    return;
+  }
+  window.open(DONATION_URL, "_blank", "noopener,noreferrer");
+}
+
+function bookForParent() {
+  window.location.href = "book.html?adminBooking=true";
+}
+
+function isAdminAssistedBooking() {
+  return new URLSearchParams(window.location.search).get("adminBooking") === "true";
 }
 
 function toggleSection(sectionId) {
@@ -53,24 +78,70 @@ function toggleSection(sectionId) {
       : "none";
 }
 
+
+/* =========================
+   SHARED PARENT ACCESS
+========================= */
+async function loginParent() {
+  const username = (document.getElementById("parentUsername")?.value || "").trim();
+  const password = document.getElementById("parentPassword")?.value || "";
+
+  const result = await verifyPortalLogin("parent", username, password);
+  if (!result.ok) {
+    alert(result.message || "Wrong username or password");
+    return;
+  }
+
+  localStorage.setItem("parentLoggedIn", "true");
+  checkParentLogin();
+}
+function logoutParent() { localStorage.removeItem("parentLoggedIn"); checkParentLogin(); }
+function checkParentLogin() {
+  const login = document.getElementById("parentLoginBox");
+  const menu = document.getElementById("parentMenu");
+  if (!login || !menu) return;
+  const ok = localStorage.getItem("parentLoggedIn") === "true";
+  login.style.display = ok ? "none" : "block";
+  menu.style.display = ok ? "block" : "none";
+}
+
+async function verifyPortalLogin(role, username, password) {
+  try {
+    const response = await fetch("/.netlify/functions/portal-auth", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "login", role, username, password })
+    });
+    const data = await response.json();
+    return { ok: response.ok && data.success, ...data };
+  } catch (error) {
+    console.error(error);
+    return { ok: false, message: "Unable to contact the login service." };
+  }
+}
+
 /* =========================
    ADMIN LOGIN
 ========================= */
 
-function loginAdmin() {
+async function loginAdmin() {
   const username = document.getElementById("adminUsername")?.value || "";
   const password = document.getElementById("adminPassword")?.value || "";
 
-  if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
-    localStorage.setItem("adminLoggedIn", "true");
-    showAdminPanel();
-  } else {
-    alert("Wrong username or password");
+  const result = await verifyPortalLogin("admin", username, password);
+  if (!result.ok) {
+    alert(result.message || "Wrong username or password");
+    return;
   }
+
+  localStorage.setItem("adminLoggedIn", "true");
+  sessionStorage.setItem("adminPasswordForChanges", password);
+  showAdminPanel();
 }
 
 function logoutAdmin() {
   localStorage.removeItem("adminLoggedIn");
+  sessionStorage.removeItem("adminPasswordForChanges");
   showLoginBox();
 }
 
@@ -88,6 +159,8 @@ function showAdminPanel() {
   renderAdminLocations();
   renderMembers();
   loadDashboard();
+  updateAdminMessageBadge();
+  renderSecurityMentors();
 }
 
 function showLoginBox() {
@@ -124,30 +197,14 @@ async function loginMentor() {
     return;
   }
 
-  if (password !== MENTOR_PASSWORD) {
-    alert("Wrong password");
-    return;
-  }
-
-  const { data, error } = await db
-    .from("mentors")
-    .select("*")
-    .ilike("name", username)
-    .limit(1);
-
-  if (error) {
-    console.error(error);
-    alert("Error checking mentor");
-    return;
-  }
-
-  if (!data || data.length === 0) {
-    alert("Mentor name not found");
+  const result = await verifyPortalLogin("mentor", username, password);
+  if (!result.ok) {
+    alert(result.message || "Wrong mentor name or password");
     return;
   }
 
   localStorage.setItem("mentorLoggedIn", "true");
-  localStorage.setItem("mentorName", data[0].name);
+  localStorage.setItem("mentorName", result.mentor_name || username);
 
   showMentorPanel();
 }
@@ -178,6 +235,7 @@ function showMentorPanel() {
   loadMentorLocations();
   renderMentorAvailability();
   renderMentorBookedSessions();
+  updateMentorMessageBadge();
 }
 
 function showMentorLoginBox() {
@@ -462,6 +520,8 @@ async function removeSlot(id) {
   loadCalendar();
   renderMentorAvailability();
   loadDashboard();
+  updateAdminMessageBadge();
+  renderSecurityMentors();
 }
 
 async function removeBookedSlot(booking) {
@@ -508,61 +568,34 @@ async function loadSearchFilters() {
 
   if (error) {
     console.error("Error loading booking filters:", error);
-
-    mentorSelect.innerHTML =
-      '<option value="">Unable to load mentors</option>';
-
-    locationSelect.innerHTML =
-      '<option value="">Unable to load locations</option>';
-
+    mentorSelect.innerHTML = '<option value="">Unable to load mentors</option>';
+    locationSelect.innerHTML = '<option value="">Unable to load locations</option>';
     return;
   }
 
   const sessions = data || [];
+  const mentors = [...new Set(sessions.map(item => item.mentor).filter(Boolean))].sort();
+  const locations = [...new Set(sessions.map(item => item.location).filter(Boolean))].sort();
 
-  const mentors = [
-    ...new Set(
-      sessions
-        .map(session => session.mentor)
-        .filter(Boolean)
-    )
-  ].sort();
+  mentorSelect.innerHTML = '<option value="">All Mentors</option>';
+  locationSelect.innerHTML = '<option value="">All Locations</option>';
 
-  const locations = [
-    ...new Set(
-      sessions
-        .map(session => session.location)
-        .filter(Boolean)
-    )
-  ].sort();
-
-  mentorSelect.innerHTML =
-    '<option value="">All Mentors</option>';
-
-  locationSelect.innerHTML =
-    '<option value="">All Locations</option>';
-
-  mentors.forEach(mentor => {
+  mentors.forEach(name => {
     const option = document.createElement("option");
-    option.value = mentor;
-    option.textContent = mentor;
+    option.value = name;
+    option.textContent = name;
     mentorSelect.appendChild(option);
   });
 
-  locations.forEach(location => {
+  locations.forEach(name => {
     const option = document.createElement("option");
-    option.value = location;
-    option.textContent = location;
+    option.value = name;
+    option.textContent = name;
     locationSelect.appendChild(option);
   });
 
-  if (mentors.includes(currentMentor)) {
-    mentorSelect.value = currentMentor;
-  }
-
-  if (locations.includes(currentLocation)) {
-    locationSelect.value = currentLocation;
-  }
+  if (mentors.includes(currentMentor)) mentorSelect.value = currentMentor;
+  if (locations.includes(currentLocation)) locationSelect.value = currentLocation;
 
   typeSelect.onchange = loadSearchFilters;
 }
@@ -597,6 +630,10 @@ function bookSlot(mentor, type, location, date, time, session_id = "") {
     session_id
   });
 
+  if (isAdminAssistedBooking()) {
+    params.set("adminBooking", "true");
+  }
+
   window.location.href = `booking.html?${params.toString()}`;
 }
 
@@ -611,6 +648,15 @@ function loadBookingPage() {
   const location = params.get("location");
   const date = params.get("date");
   const time = params.get("time");
+  const adminBooking = params.get("adminBooking") === "true";
+
+  const title = document.getElementById("confirmBookingTitle");
+  const notice = document.getElementById("adminBookingNotice");
+
+  if (adminBooking) {
+    if (title) title.textContent = "Book Session for Parent";
+    if (notice) notice.style.display = "block";
+  }
 
   if (!mentor || !type || !location || !date || !time) {
     container.innerHTML = "<p>No booking details found. Please go back and select a session.</p>";
@@ -645,84 +691,53 @@ function getBookingData() {
     rawDate,
     date: rawDate ? formatDisplayDate(rawDate) : "",
     time: params.get("time") || "",
-    session_id: params.get("session_id") || ""
+    session_id: params.get("session_id") || "",
+    adminBooking: params.get("adminBooking") === "true"
   };
 }
 
 async function confirmBooking() {
   const booking = getBookingData();
   const consent = document.getElementById("gdprConsent")?.checked;
-
-  if (!consent) {
-    alert("Please confirm consent to continue");
-    return;
-  }
-
-  if (!booking.child || !booking.parent || !booking.phone || !booking.email) {
-    alert("Please fill all details");
-    return;
-  }
-
+  if (!consent) return alert("Please confirm consent to continue");
+  if (!booking.child || !booking.parent || !booking.phone || !booking.email) return alert("Please fill all details");
   const phone = booking.phone.replace(/\s/g, "");
+  if (!/^\d{10,13}$/.test(phone)) return alert("Please enter a valid phone number");
 
-  if (!/^\d{10,13}$/.test(phone)) {
-    alert("Please enter a valid phone number");
-    return;
-  }
+  const bookingReference = createBookingReference();
 
-  const { error } = await db
-    .from("bookings")
-    .insert([{
-      child: booking.child,
-      parent: booking.parent,
-      phone: phone,
-      email: booking.email,
-      mentor: booking.mentor,
-      type: booking.type,
-      location: booking.location,
-      date: booking.rawDate,
-      time: booking.time,
-      paid: false
-    }]);
-
-  if (error) {
-    console.error(error);
-    alert("Error saving booking");
-    return;
-  }
+  const { data: savedBooking, error } = await db.from("bookings").insert([{
+    child: booking.child, parent: booking.parent, phone, email: booking.email,
+    booking_reference: bookingReference,
+    mentor: booking.mentor, type: booking.type, location: booking.location,
+    date: booking.rawDate, time: booking.time, paid: false
+  }]).select("id, manage_token, booking_reference").single();
+  if (error) { console.error(error); return alert("Error saving booking"); }
 
   await removeBookedSlot(booking);
-await fetch("/.netlify/functions/send-booking-email", {
-method: "POST",
-headers: {
-"Content-Type": "application/json"
-},
-body: JSON.stringify({
-booking: {
-child: booking.child,
-parent: booking.parent,
-phone: phone,
-date: booking.date,
-time: booking.time,
-location: booking.location,
-type: booking.type,
-parent_email: booking.email
-}
-})
-});
+  const { data: mentorRows } = await db.from("mentors").select("email").eq("name", booking.mentor).limit(1);
+  const mentorEmail = mentorRows?.[0]?.email || "";
+  const manageUrl = `${window.location.origin}/manage-booking.html?token=${encodeURIComponent(savedBooking.manage_token)}`;
+
+  try {
+    await fetch("/.netlify/functions/send-booking-email", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ booking: {
+        child: booking.child, parent: booking.parent, phone, mentor: booking.mentor,
+        date: booking.date, time: booking.time, location: booking.location, type: booking.type,
+        parent_email: booking.email, mentor_email: mentorEmail, manage_url: manageUrl,
+        booking_reference: savedBooking.booking_reference
+      }})
+    });
+  } catch (emailError) { console.error("Email error:", emailError); }
 
   const params = new URLSearchParams({
-    child: booking.child,
-    parent: booking.parent,
-    phone: phone,
-    email: booking.email,
-    mentor: booking.mentor,
-    type: booking.type,
-    location: booking.location,
-    date: booking.rawDate,
-    time: booking.time
+    child: booking.child, parent: booking.parent, phone, email: booking.email,
+    mentor: booking.mentor, type: booking.type, location: booking.location,
+    date: booking.rawDate, time: booking.time, manage_token: savedBooking.manage_token,
+    booking_reference: savedBooking.booking_reference,
+    adminBooking: booking.adminBooking ? "true" : "false"
   });
-
   window.location.href = `confirmed.html?${params.toString()}`;
 }
 
@@ -736,9 +751,24 @@ function loadConfirmedPage() {
 
   const booking = getConfirmedData();
 
+  const title = document.getElementById("confirmedPageTitle");
+  const backButton = document.getElementById("confirmedBackButton");
+
+  if (booking.adminBooking) {
+    if (title) title.textContent = "Parent Booking Confirmed";
+    if (backButton) {
+      backButton.textContent = "RETURN TO ADMIN";
+      backButton.onclick = () => { window.location.href = "admin.html"; };
+    }
+  }
+
   if (!booking.mentor || !booking.type || !booking.location || !booking.rawDate || !booking.time) return;
 
+  const manageButton = document.getElementById("manageBookingButton");
+  if (manageButton && booking.manage_token) manageButton.style.display = "block";
+
   container.innerHTML = `
+    ${booking.booking_reference ? `<p><strong>Reference:</strong> ${escapeHtml(booking.booking_reference)}</p>` : ""}
     <p><strong>${booking.mentor}</strong> — ${booking.type}</p>
     <p>${booking.location}</p>
     <p>${booking.date}</p>
@@ -762,8 +792,16 @@ function getConfirmedData() {
     location: params.get("location") || "",
     rawDate,
     date: rawDate ? formatDisplayDate(rawDate) : "",
-    time: params.get("time") || ""
+    time: params.get("time") || "",
+    manage_token: params.get("manage_token") || "",
+    booking_reference: params.get("booking_reference") || "",
+    adminBooking: params.get("adminBooking") === "true"
   };
+}
+
+function openManageBooking() {
+  const token = getConfirmedData().manage_token;
+  if (token) window.location.href = `manage-booking.html?token=${encodeURIComponent(token)}`;
 }
 
 function sendWhatsAppNow() {
@@ -808,30 +846,100 @@ Time: ${booking.time}
   window.location.href = `mailto:Raving4areason1@outlook.com?subject=${subject}&body=${body}`;
 }
 
-function addToCalendar() {
-  const booking = document.getElementById("confirmedDetails")
-    ? getConfirmedData()
-    : getBookingData();
+function getCalendarBooking() {
+  return document.getElementById("confirmedDetails") ? getConfirmedData() : getBookingData();
+}
 
-  if (!booking.rawDate || !booking.time) return;
+function getCalendarDates(booking) {
+  if (!booking.rawDate || !booking.time) return null;
+  const [hour, minute] = booking.time.split(":").map(Number);
+  const start = new Date(`${booking.rawDate}T${String(hour).padStart(2,"0")}:${String(minute).padStart(2,"0")}:00`);
+  const end = new Date(start.getTime() + 60 * 60 * 1000);
+  const compact = date => date.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+  return { start, end, startCompact: compact(start), endCompact: compact(end) };
+}
 
-  const startDate = booking.rawDate.replace(/-/g, "");
-  const endDate = booking.rawDate.replace(/-/g, "");
-
-  const [hour, minute] = booking.time.split(":");
-  const start = `${startDate}T${hour}${minute}00`;
-  const endHour = String(parseInt(hour, 10) + 1).padStart(2, "0");
-  const end = `${endDate}T${endHour}${minute}00`;
-
+function addToGoogleCalendar() {
+  const booking = getCalendarBooking();
+  const dates = getCalendarDates(booking);
+  if (!dates) return;
   const title = encodeURIComponent(`Raving 4 A Reason – ${booking.type} Session`);
   const details = encodeURIComponent(`Mentor: ${booking.mentor}`);
   const location = encodeURIComponent(booking.location);
-
-  window.open(
-    `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${start}/${end}&details=${details}&location=${location}`,
-    "_blank"
-  );
+  window.open(`https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${dates.startCompact}/${dates.endCompact}&details=${details}&location=${location}`, "_blank", "noopener,noreferrer");
 }
+
+function addToOutlookCalendar() {
+  const booking = getCalendarBooking();
+  const dates = getCalendarDates(booking);
+  if (!dates) return;
+  const params = new URLSearchParams({
+    path: "/calendar/action/compose",
+    rru: "addevent",
+    subject: `Raving 4 A Reason – ${booking.type} Session`,
+    startdt: dates.start.toISOString(),
+    enddt: dates.end.toISOString(),
+    body: `Mentor: ${booking.mentor}`,
+    location: booking.location
+  });
+  window.open(`https://outlook.live.com/calendar/0/deeplink/compose?${params.toString()}`, "_blank", "noopener,noreferrer");
+}
+
+function downloadCalendarFile() {
+  const booking = getCalendarBooking();
+  const dates = getCalendarDates(booking);
+  if (!dates) return;
+  const safe = value => String(value || "").replace(/[\n\r,;]/g, " ");
+  const ics = [
+    "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Raving 4 A Reason//Booking//EN",
+    "BEGIN:VEVENT", `UID:${Date.now()}@raving4areason`,
+    `DTSTAMP:${new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "")}`,
+    `DTSTART:${dates.startCompact}`, `DTEND:${dates.endCompact}`,
+    `SUMMARY:${safe(`Raving 4 A Reason – ${booking.type} Session`)}`,
+    `DESCRIPTION:${safe(`Mentor: ${booking.mentor}`)}`,
+    `LOCATION:${safe(booking.location)}`, "END:VEVENT", "END:VCALENDAR"
+  ].join("\r\n");
+  const blob = new Blob([ics], { type: "text/calendar;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `r4ar-${booking.rawDate}-${booking.time.replace(":", "")}.ics`;
+  document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+}
+
+function addToCalendar() { addToGoogleCalendar(); }
+
+/* =========================
+   SECURITY SETTINGS
+========================= */
+async function changePortalPassword(targetRole, mentorId = "") {
+  const adminPassword = sessionStorage.getItem("adminPasswordForChanges") || prompt("Enter the current admin password");
+  if (!adminPassword) return;
+  const newPassword = prompt("Enter the new password (minimum 8 characters)");
+  if (!newPassword) return;
+  if (newPassword.length < 8) return alert("Password must be at least 8 characters.");
+  const confirmPassword = prompt("Enter the new password again");
+  if (newPassword !== confirmPassword) return alert("The passwords do not match.");
+
+  const response = await fetch("/.netlify/functions/portal-auth", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "change-password", admin_password: adminPassword, target_role: targetRole, mentor_id: mentorId, new_password: newPassword })
+  });
+  const data = await response.json();
+  if (!response.ok || !data.success) return alert(data.message || "Password could not be changed.");
+  if (targetRole === "admin") sessionStorage.setItem("adminPasswordForChanges", newPassword);
+  alert("Password updated successfully.");
+}
+
+async function renderSecurityMentors() {
+  const container = document.getElementById("securityMentorList");
+  if (!container) return;
+  const { data, error } = await db.from("mentors").select("id,name").order("name");
+  if (error) { container.innerHTML = "<p>Error loading mentors.</p>"; return; }
+  container.innerHTML = (data || []).map(m => `<div class="security-row"><span>${escapeHtml(m.name)}</span><button class="small-action-btn" onclick="changePortalPassword('mentor','${m.id}')">RESET PASSWORD</button></div>`).join("") || "<p>No mentors added.</p>";
+}
+
 
 /* =========================
    ADMIN MENTORS / LOCATIONS
@@ -972,6 +1080,8 @@ async function removeMentor(id) {
   loadAdminDropdowns();
   loadSearchFilters();
   loadDashboard();
+  updateAdminMessageBadge();
+  renderSecurityMentors();
 }
 
 async function addLocation() {
@@ -1054,6 +1164,8 @@ async function removeLocation(id) {
   loadAdminDropdowns();
   loadSearchFilters();
   loadDashboard();
+  updateAdminMessageBadge();
+  renderSecurityMentors();
 }
 
 /* =========================
@@ -1115,6 +1227,8 @@ async function togglePaid(id, currentStatus) {
 
   renderBookedSessions();
   loadDashboard();
+  updateAdminMessageBadge();
+  renderSecurityMentors();
 }
 
 async function removeBookedSession(id) {
@@ -1132,6 +1246,8 @@ async function removeBookedSession(id) {
   renderBookedSessions();
   renderMentorBookedSessions();
   loadDashboard();
+  updateAdminMessageBadge();
+  renderSecurityMentors();
 }
 
 async function renderMentorBookedSessions() {
@@ -1295,6 +1411,8 @@ async function removeMentorAvailability(id) {
   renderAdminSlots();
   loadCalendar();
   loadDashboard();
+  updateAdminMessageBadge();
+  renderSecurityMentors();
 }
 
 /* =========================
@@ -1443,17 +1561,178 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
+
+function loadBookPageMode() {
+  const title = document.getElementById("bookPageTitle");
+  const notice = document.getElementById("adminBookingNotice");
+
+  if (isAdminAssistedBooking()) {
+    if (title) title.textContent = "Book Session for Parent";
+    if (notice) notice.style.display = "block";
+  }
+}
+
+
+/* =========================
+   NEWSLETTERS
+========================= */
+async function fetchNewsletters() {
+  const { data, error } = await db.from("newsletters").select("*").order("published_date", { ascending: false }).order("created_at", { ascending: false }).limit(3);
+  if (error) { console.error(error); return []; }
+  return data || [];
+}
+async function loadNewsletterPage() {
+  const container = document.getElementById("newsletterPublicList");
+  if (!container) return;
+  const rows = await fetchNewsletters();
+  if (!rows.length) { container.innerHTML = '<p>No newsletters available yet.</p>'; return; }
+  container.innerHTML = rows.map((n, i) => `<div class="slot-card newsletter-card"><h2>${i===0?'Latest Newsletter':'Previous Newsletter'}</h2><p><strong>${escapeHtml(n.title)}</strong></p><p>Published: ${formatDisplayDate(n.published_date)}</p><a class="button-link" href="${n.file_url}" target="_blank" rel="noopener">DOWNLOAD PDF</a></div>`).join("");
+}
+async function renderNewsletterAdmin() {
+  const container = document.getElementById("adminNewsletterList");
+  if (!container) return;
+  const rows = await fetchNewsletters();
+  container.innerHTML = rows.length ? rows.map(n => `<div class="slot-card"><p><strong>${escapeHtml(n.title)}</strong></p><p>${formatDisplayDate(n.published_date)}</p><a href="${n.file_url}" target="_blank">Open PDF</a><button onclick="deleteNewsletter('${n.id}','${encodeURIComponent(n.storage_path)}')" class="danger-btn">DELETE</button></div>`).join("") : '<p>No newsletters uploaded.</p>';
+}
+async function uploadNewsletter() {
+  const title = document.getElementById("newsletterTitle")?.value.trim() || "";
+  const publishedDate = document.getElementById("newsletterPublishedDate")?.value || "";
+  const file = document.getElementById("newsletterFile")?.files?.[0];
+  if (!title || !publishedDate || !file) return alert("Please enter a title, date and PDF file");
+  if (file.type !== "application/pdf") return alert("Please choose a PDF file");
+  const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, "-");
+  const path = `${Date.now()}-${safe}`;
+  const { error: uploadError } = await db.storage.from("newsletters").upload(path, file, { contentType: "application/pdf" });
+  if (uploadError) { console.error(uploadError); return alert("Newsletter upload failed"); }
+  const { data: publicData } = db.storage.from("newsletters").getPublicUrl(path);
+  const { error } = await db.from("newsletters").insert([{ title, published_date: publishedDate, storage_path: path, file_url: publicData.publicUrl }]);
+  if (error) { console.error(error); return alert("Could not save newsletter"); }
+  const { data: allRows } = await db.from("newsletters").select("id,storage_path").order("published_date", { ascending: false }).order("created_at", { ascending: false });
+  for (const old of (allRows || []).slice(3)) {
+    await db.storage.from("newsletters").remove([old.storage_path]);
+    await db.from("newsletters").delete().eq("id", old.id);
+  }
+  document.getElementById("newsletterTitle").value = "";
+  document.getElementById("newsletterPublishedDate").value = "";
+  document.getElementById("newsletterFile").value = "";
+  renderNewsletterAdmin(); loadNewsletterPage();
+}
+async function deleteNewsletter(id, encodedPath) {
+  if (!confirm("Delete this newsletter?")) return;
+  const path = decodeURIComponent(encodedPath);
+  await db.storage.from("newsletters").remove([path]);
+  const { error } = await db.from("newsletters").delete().eq("id", id);
+  if (error) return alert("Could not delete newsletter");
+  renderNewsletterAdmin();
+}
+
+/* =========================
+   BOOKING-SPECIFIC MESSAGING
+========================= */
+function getManageToken() { return new URLSearchParams(window.location.search).get("token") || ""; }
+async function loadManageBookingPage() {
+  const details = document.getElementById("manageBookingDetails");
+  if (!details) return;
+  const token = getManageToken();
+  if (!token) { details.innerHTML = '<p>Invalid booking link.</p>'; return; }
+  const { data, error } = await db.from("bookings").select("*").eq("manage_token", token).limit(1);
+  if (error || !data?.length) { details.innerHTML = '<p>This booking link is invalid or no longer available.</p>'; return; }
+  currentManagedBooking = data[0];
+  details.innerHTML = `${currentManagedBooking.booking_reference ? `<p><strong>Reference:</strong> ${escapeHtml(currentManagedBooking.booking_reference)}</p>` : ""}<p><strong>${escapeHtml(currentManagedBooking.child)}</strong></p><p>Parent: ${escapeHtml(currentManagedBooking.parent)}</p><p>${escapeHtml(currentManagedBooking.mentor)} — ${escapeHtml(currentManagedBooking.type)}</p><p>${escapeHtml(currentManagedBooking.location)}</p><p>${formatDisplayDate(currentManagedBooking.date)} at ${escapeHtml(currentManagedBooking.time)}</p>`;
+  document.getElementById("parentMessageArea").style.display = "block";
+  await renderParentMessages();
+}
+async function fetchMessagesForBooking(bookingId) {
+  const { data, error } = await db.from("messages").select("*").eq("booking_id", bookingId).order("created_at", { ascending: true });
+  if (error) { console.error(error); return []; }
+  return data || [];
+}
+function messageBubble(m) {
+  return `<div class="message-bubble ${m.sender_role}"><div class="message-meta"><strong>${escapeHtml(m.sender_name)}</strong> · ${new Date(m.created_at).toLocaleString('en-GB')}</div><div>${escapeHtml(m.body).replace(/\n/g,'<br>')}</div></div>`;
+}
+async function renderParentMessages() {
+  if (!currentManagedBooking) return;
+  currentManagedMessages = await fetchMessagesForBooking(currentManagedBooking.id);
+  const box = document.getElementById("parentMessages");
+  if (box) box.innerHTML = currentManagedMessages.length ? currentManagedMessages.map(messageBubble).join("") : '<p>No messages yet.</p>';
+  await db.from("messages").update({ read_by_parent: true }).eq("booking_id", currentManagedBooking.id);
+}
+async function sendParentMessage() {
+  if (!currentManagedBooking) return;
+  const body = document.getElementById("parentMessageText")?.value.trim() || "";
+  const recipientScope = document.getElementById("messageRecipient")?.value || "mentor";
+  if (!body) return alert("Please type a message");
+  const { error } = await db.from("messages").insert([{ booking_id: currentManagedBooking.id, sender_role: "parent", sender_name: currentManagedBooking.parent, recipient_scope: recipientScope, body, read_by_parent: true, read_by_admin: recipientScope === "mentor", read_by_mentor: recipientScope === "admin" }]);
+  if (error) { console.error(error); return alert("Message could not be sent"); }
+  document.getElementById("parentMessageText").value = "";
+  renderParentMessages();
+}
+async function deleteConversationAsParent() {
+  if (!currentManagedBooking || !confirm("Permanently delete this conversation?")) return;
+  const { error } = await db.from("messages").delete().eq("booking_id", currentManagedBooking.id);
+  if (error) return alert("Could not delete conversation");
+  renderParentMessages();
+}
+async function getMessageThreads(role, mentorName="") {
+  let bookingsQuery = db.from("bookings").select("id,booking_reference,child,parent,mentor,type,location,date,time").order("date", { ascending: true });
+  if (role === "mentor") bookingsQuery = bookingsQuery.eq("mentor", mentorName);
+  const { data: bookings } = await bookingsQuery;
+  if (!bookings?.length) return [];
+  const ids = bookings.map(b=>b.id);
+  const { data: messages } = await db.from("messages").select("*").in("booking_id", ids).order("created_at", { ascending: true });
+  const byId = Object.groupBy ? Object.groupBy(messages || [], m=>m.booking_id) : (messages||[]).reduce((a,m)=>((a[m.booking_id]??=[]).push(m),a),{});
+  return bookings.map(b=>({ booking:b, messages:byId[b.id]||[] })).filter(t => role==='admin' ? t.messages.some(m=>m.recipient_scope==='admin'||m.recipient_scope==='both'||m.sender_role==='admin') : t.messages.some(m=>m.recipient_scope==='mentor'||m.recipient_scope==='both'||m.sender_role==='mentor'));
+}
+function threadHtml(thread, role) {
+  const b=thread.booking;
+  return `<div class="message-thread"><div class="slot-card">${b.booking_reference ? `<p><strong>Reference:</strong> ${escapeHtml(b.booking_reference)}</p>` : ""}<p><strong>${escapeHtml(b.child)}</strong> · Parent: ${escapeHtml(b.parent)}</p><p>${escapeHtml(b.mentor)} — ${escapeHtml(b.type)}</p><p>${formatDisplayDate(b.date)} ${escapeHtml(b.time)} · ${escapeHtml(b.location)}</p></div><div class="message-list">${thread.messages.map(messageBubble).join("")}</div><textarea id="reply-${role}-${b.id}" class="message-textarea" placeholder="Type reply"></textarea><button onclick="sendStaffReply('${role}','${b.id}')">REPLY TO PARENT</button><button onclick="downloadThreadPdf('${b.id}','${role}')" class="secondary">DOWNLOAD CHAT PDF</button><button onclick="deleteStaffConversation('${b.id}','${role}')" class="danger-btn">DELETE CHAT</button></div>`;
+}
+async function renderAdminMessages() {
+  const container=document.getElementById("adminMessageThreads"); if(!container)return;
+  const threads=await getMessageThreads("admin");
+  container.innerHTML=threads.length?threads.map(t=>threadHtml(t,"admin")).join(""):'<p>No messages for admin.</p>';
+  const ids = threads.map(t=>t.booking.id);
+  if (ids.length) await db.from("messages").update({read_by_admin:true}).in("booking_id",ids);
+  updateAdminMessageBadge();
+  renderSecurityMentors();
+}
+async function renderMentorMessages() {
+  const container=document.getElementById("mentorMessageThreads"); if(!container)return;
+  const name=getLoggedInMentorName(); const threads=await getMessageThreads("mentor",name);
+  container.innerHTML=threads.length?threads.map(t=>threadHtml(t,"mentor")).join(""):'<p>No mentor messages.</p>';
+  const ids = threads.map(t=>t.booking.id);
+  if (ids.length) await db.from("messages").update({read_by_mentor:true}).in("booking_id",ids);
+  updateMentorMessageBadge();
+}
+async function sendStaffReply(role, bookingId) {
+  const body=document.getElementById(`reply-${role}-${bookingId}`)?.value.trim()||""; if(!body)return alert("Please type a reply");
+  const senderName=role==='admin'?'Raving 4 A Reason Admin':getLoggedInMentorName();
+  const {error}=await db.from("messages").insert([{booking_id:bookingId,sender_role:role,sender_name:senderName,recipient_scope:"parent",body,read_by_parent:false,read_by_admin:role==='admin',read_by_mentor:role==='mentor'}]);
+  if(error)return alert("Reply could not be sent");
+  if(role==='admin')renderAdminMessages();else renderMentorMessages();
+}
+async function deleteStaffConversation(bookingId,role){if(!confirm("Permanently delete this conversation?"))return;await db.from("messages").delete().eq("booking_id",bookingId);if(role==='admin')renderAdminMessages();else renderMentorMessages();}
+async function updateAdminMessageBadge(){const badge=document.getElementById("adminMessageBadge");if(!badge)return;const{count}=await db.from("messages").select("id",{count:"exact",head:true}).eq("read_by_admin",false).in("recipient_scope",["admin","both"]);badge.textContent=count||"";badge.style.display=count?"inline-flex":"none";}
+async function updateMentorMessageBadge(){const badge=document.getElementById("mentorMessageBadge");if(!badge)return;const name=getLoggedInMentorName();if(!name)return;const{data:bookings}=await db.from("bookings").select("id").eq("mentor",name);const ids=(bookings||[]).map(b=>b.id);if(!ids.length){badge.style.display="none";return;}const{count}=await db.from("messages").select("id",{count:"exact",head:true}).in("booking_id",ids).eq("read_by_mentor",false).in("recipient_scope",["mentor","both"]);badge.textContent=count||"";badge.style.display=count?"inline-flex":"none";}
+async function downloadThreadPdf(bookingId,role){const msgs=await fetchMessagesForBooking(bookingId);const {data:b}=await db.from("bookings").select("*").eq("id",bookingId).single();createConversationPdf(b,msgs);}
+function downloadConversationPdf(){if(currentManagedBooking)createConversationPdf(currentManagedBooking,currentManagedMessages);}
+function createConversationPdf(b,msgs){if(!window.jspdf)return alert("PDF library is not available");const{jsPDF}=window.jspdf;const doc=new jsPDF();let y=15;doc.setFontSize(16);doc.text("Raving 4 A Reason Conversation",15,y);y+=10;doc.setFontSize(10);[...(b.booking_reference ? [`Reference: ${b.booking_reference}`] : []),`Member: ${b.child}`,`Parent: ${b.parent}`,`Mentor: ${b.mentor}`,`Session: ${b.type}`,`Date: ${formatDisplayDate(b.date)} ${b.time}`,`Location: ${b.location}`].forEach(line=>{doc.text(line,15,y);y+=6;});y+=4;(msgs||[]).forEach(m=>{const lines=doc.splitTextToSize(`${m.sender_name} (${new Date(m.created_at).toLocaleString('en-GB')}): ${m.body}`,180);if(y+lines.length*5>280){doc.addPage();y=15;}doc.text(lines,15,y);y+=lines.length*5+4;});doc.save(`conversation-${b.child.replace(/[^a-z0-9]/gi,'-')}.pdf`);}
+
 /* =========================
    PAGE LOAD
 ========================= */
 
 window.onload = () => {
+  checkParentLogin();
+  loadBookPageMode();
   loadCalendar();
   loadBookingPage();
   loadConfirmedPage();
   loadSearchFilters();
   checkAdminLogin();
   checkMentorLogin();
+  loadNewsletterPage();
+  loadManageBookingPage();
 
   const memberSearch = document.getElementById("memberSearch");
   const memberTypeFilter = document.getElementById("memberTypeFilter");
