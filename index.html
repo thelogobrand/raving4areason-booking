@@ -2,30 +2,35 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Raving 4 A Reason</title>
+  <title>Raving 4 A Reason Parent Portal</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="stylesheet" href="styles.css">
   <link rel="manifest" href="/manifest.json">
-  <link rel="apple-touch-icon" sizes="180x180" href="/images/bookapp-icon.png">
+  <link rel="apple-touch-icon" href="/images/bookapp-icon.png">
   <meta name="theme-color" content="#000000">
 </head>
 <body>
   <div class="logo-wrap"><img src="r4ar.png" alt="Raving 4 A Reason" class="logo"></div>
   <div class="container">
     <div id="parentLoginBox">
-      <h1>Parent Access</h1>
-      <input type="text" id="parentUsername" value="R4ARparent" readonly autocomplete="username">
+      <h1>Parent Portal</h1>
+      <input type="text" id="parentUsername" value="R4ARparent" readonly aria-label="Parent username">
       <input type="password" id="parentPassword" placeholder="Password" autocomplete="current-password">
       <button onclick="loginParent()">LOGIN</button>
     </div>
+
     <div id="parentMenu" style="display:none;">
-      <h1>Raving 4 A Reason</h1>
+      <h1>Parent Portal</h1>
       <button onclick="goToBooking()">BOOK A SESSION</button>
       <button onclick="goToCalendar()" class="secondary">AVAILABLE SESSIONS</button>
       <button onclick="goToNewsletter()" class="secondary">NEWSLETTER</button>
-      <button onclick="goToContact()" class="secondary">CONTACT</button>
-      <button onclick="openDonationPage()" class="donation-btn">❤️ MAKE A DONATION</button>
-      <div class="logout-section"><div class="logout-divider"></div><button onclick="logoutParent()" class="logout-btn">LOG OUT</button></div>
+
+      <div class="parent-secondary-actions">
+        <button onclick="goToContact()" class="footer-action-btn">CONTACT US</button>
+        <button onclick="openDonationPage()" class="footer-action-btn donation-btn">❤️ MAKE A DONATION</button>
+      </div>
+
+      <button onclick="logoutParent()" class="logout-btn">LOG OUT</button>
     </div>
   </div>
   <footer>Raving 4 A Reason CIC | C.I.C REG 16251433</footer>
