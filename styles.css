@@ -489,3 +489,21 @@ footer {
 .footer-action-btn:hover { box-shadow: none; background: rgba(255,255,255,.08); }
 .donation-btn { border-color: rgba(255,105,180,.65); }
 .contact-link { color: #ffd700; word-break: break-word; }
+
+
+/* ===== MENTOR AVAILABILITY V2 ===== */
+.helper-text { color: #999; font-size: 12px; line-height: 1.5; margin-top: 12px; }
+.mentor-current-details { width: 90%; max-width: 340px; margin: 12px auto; padding: 12px; border: 1px solid rgba(255,215,0,.28); border-radius: 12px; background: #101010; text-align: left; }
+.mentor-current-details p { margin: 6px 0; }
+.mentor-change-row { width: 90%; max-width: 340px; margin: 0 auto 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.compact-btn { width: 100%; margin: 0; padding: 9px 6px; font-size: 11px; }
+.mentor-override { margin-bottom: 8px; }
+.time-choice-grid { width: 90%; max-width: 340px; margin: 8px auto 16px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.time-choice { width: 100%; max-width: none; margin: 0; padding: 10px 4px; border-radius: 10px; background: #151515; border: 1px solid #444; box-shadow: none; font-size: 14px; }
+.time-choice.selected { background: linear-gradient(#d00000,#9b0000); border-color: #ffd700; box-shadow: 0 0 10px rgba(255,215,0,.35); }
+.session-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+.session-actions button { width: 100%; max-width: none; margin: 0; }
+.small-edit-btn { padding: 8px 12px; background: transparent; border: 1px solid rgba(255,215,0,.6); color: #ffd700; box-shadow: none; font-size: 11px; }
+.booking-notes-input { display: block; width: 90%; max-width: 340px; min-height: 95px; resize: vertical; margin: 10px auto; padding: 12px; border-radius: 10px; border: 1px solid #333; background: #111; color: #fff; font-size: 16px; }
+.booking-notes { margin: 12px 0; padding: 12px; border-left: 3px solid #ffd700; background: #181818; text-align: left; white-space: pre-wrap; }
+@media (max-width: 380px) { .mentor-change-row { grid-template-columns: 1fr; } }
