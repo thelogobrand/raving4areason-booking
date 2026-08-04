@@ -491,19 +491,113 @@ footer {
 .contact-link { color: #ffd700; word-break: break-word; }
 
 
-/* ===== MENTOR AVAILABILITY V2 ===== */
-.helper-text { color: #999; font-size: 12px; line-height: 1.5; margin-top: 12px; }
-.mentor-current-details { width: 90%; max-width: 340px; margin: 12px auto; padding: 12px; border: 1px solid rgba(255,215,0,.28); border-radius: 12px; background: #101010; text-align: left; }
-.mentor-current-details p { margin: 6px 0; }
-.mentor-change-row { width: 90%; max-width: 340px; margin: 0 auto 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.compact-btn { width: 100%; margin: 0; padding: 9px 6px; font-size: 11px; }
-.mentor-override { margin-bottom: 8px; }
-.time-choice-grid { width: 90%; max-width: 340px; margin: 8px auto 16px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-.time-choice { width: 100%; max-width: none; margin: 0; padding: 10px 4px; border-radius: 10px; background: #151515; border: 1px solid #444; box-shadow: none; font-size: 14px; }
-.time-choice.selected { background: linear-gradient(#d00000,#9b0000); border-color: #ffd700; box-shadow: 0 0 10px rgba(255,215,0,.35); }
-.session-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
-.session-actions button { width: 100%; max-width: none; margin: 0; }
-.small-edit-btn { padding: 8px 12px; background: transparent; border: 1px solid rgba(255,215,0,.6); color: #ffd700; box-shadow: none; font-size: 11px; }
-.booking-notes-input { display: block; width: 90%; max-width: 340px; min-height: 95px; resize: vertical; margin: 10px auto; padding: 12px; border-radius: 10px; border: 1px solid #333; background: #111; color: #fff; font-size: 16px; }
-.booking-notes { margin: 12px 0; padding: 12px; border-left: 3px solid #ffd700; background: #181818; text-align: left; white-space: pre-wrap; }
-@media (max-width: 380px) { .mentor-change-row { grid-template-columns: 1fr; } }
+/* ===== MENTOR PORTAL V2 ===== */
+.mentor-container { max-width: 560px; }
+.mentor-hero {
+  background: linear-gradient(145deg, #111, #080808);
+  border: 1px solid rgba(255,215,0,.35);
+  border-radius: 18px;
+  padding: 20px 16px;
+  margin-bottom: 18px;
+}
+.mentor-date { color:#aaa; font-size:14px; margin-bottom:8px; }
+.mentor-summary-intro { color:#ddd; margin:4px 0 12px; }
+.mentor-summary { display:grid; gap:10px; }
+.summary-card {
+  width:100%;
+  max-width:none;
+  margin:0;
+  background:#151515;
+  border:1px solid #333;
+  box-shadow:none;
+  text-align:left;
+}
+.next-booking-card {
+  background:#111;
+  border:1px solid rgba(255,215,0,.35);
+  border-radius:16px;
+  padding:16px;
+  margin:14px 0 18px;
+}
+.next-booking-card h2 { color:#ffd700; margin-top:0; }
+.mentor-menu-btn {
+  max-width:none;
+  width:100%;
+  margin:10px 0;
+  background:
+    linear-gradient(#101010,#191919) padding-box,
+    linear-gradient(90deg,#d4af37,#ffd700,#b8962e) border-box;
+}
+.mentor-section {
+  background:#090909;
+  border:1px solid #222;
+  border-radius:14px;
+  padding:14px 10px;
+  margin:0 0 14px;
+}
+.time-grid {
+  width:90%;
+  max-width:420px;
+  margin:10px auto 16px;
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:8px;
+}
+.time-choice {
+  width:100%;
+  margin:0;
+  padding:11px 6px;
+  background:#151515;
+  border:1px solid #d4af37;
+  box-shadow:none;
+  color:#fff;
+}
+.time-choice.selected {
+  background:#176d35;
+  border-color:#40d979;
+  box-shadow:0 0 10px rgba(64,217,121,.25);
+}
+.danger-btn {
+  background:#9e1111;
+  border:1px solid #d44;
+  box-shadow:none;
+}
+.mentor-textarea {
+  display:block;
+  width:90%;
+  max-width:340px;
+  min-height:95px;
+  margin:10px auto;
+  padding:12px;
+  border-radius:10px;
+  border:1px solid #333;
+  background:#111;
+  color:#fff;
+  font-size:16px;
+  resize:vertical;
+}
+.booking-note {
+  margin-top:12px;
+  padding:10px;
+  background:#191919;
+  border-left:3px solid #ffd700;
+  text-align:left;
+}
+.unread-card { border-color:#ffd700; }
+.small-muted { color:#888; font-size:12px; }
+.download-link {
+  display:inline-block;
+  margin-top:10px;
+  padding:10px 14px;
+  border:1px solid #ffd700;
+  border-radius:10px;
+  color:#fff;
+  text-decoration:none;
+  font-weight:bold;
+}
+input[type="file"] { padding:9px; }
+
+@media (max-width:480px) {
+  .time-grid { grid-template-columns:repeat(3,1fr); width:100%; }
+  .mentor-section { padding:12px 8px; }
+}
