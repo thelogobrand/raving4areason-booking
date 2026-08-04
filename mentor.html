@@ -5,83 +5,65 @@
   <title>Mentor Portal</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="stylesheet" href="styles.css">
-<link rel="manifest" href="/manifest.json">
-<link rel="apple-touch-icon" href="/images/bookapp-icon.png">
-<link rel="apple-touch-icon" sizes="180x180" href="/images/bookapp-icon.png">
-<meta name="theme-color" content="#000000">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="/images/bookapp-icon.png">
+  <meta name="theme-color" content="#000000">
 </head>
-
 <body>
-
-  <div class="logo-wrap">
-    <img src="r4ar.png" alt="Raving 4 A Reason" class="logo">
-  </div>
-
+  <div class="logo-wrap"><img src="r4ar.png" alt="Raving 4 A Reason" class="logo"></div>
   <div class="container">
-
     <div id="mentorLoginBox">
       <h1>Mentor Login</h1>
-
-      <input type="text" id="mentorUsername" placeholder="Your Name">
+      <input type="text" id="mentorUsername" placeholder="Mentor Name">
       <input type="password" id="mentorPassword" placeholder="Password">
-
       <button onclick="loginMentor()">LOGIN</button>
-
+      <p class="helper-text">Username: your mentor name<br>Default password: Mentor</p>
     </div>
 
     <div id="mentorPanel" style="display:none;">
       <h1 id="mentorWelcome">Mentor Portal</h1>
-
       <h2>Add Availability</h2>
 
-     <label class="field-label">Date</label>
-     <input type="date" id="mentorDate">
+      <label class="field-label" for="mentorDate">Date</label>
+      <input type="date" id="mentorDate">
 
-      <input type="text" id="mentorLocation" list="mentorLocationList" placeholder="Select or type location">
-      <datalist id="mentorLocationList"></datalist>
+      <div class="mentor-current-details">
+        <p><strong>Type:</strong> <span id="mentorCurrentType">Loading…</span></p>
+        <p><strong>Location:</strong> <span id="mentorCurrentLocation">Loading…</span></p>
+      </div>
 
-      <input type="text" id="mentorTime" list="mentorTimeList" placeholder="Select or type time">
-      <datalist id="mentorTimeList">
-        <option value="12:00">
-        <option value="13:00">
-        <option value="14:00">
-        <option value="15:00">
-        <option value="16:00">
-        <option value="17:00">
-        <option value="18:00">
-        <option value="19:00">
-        <option value="20:00">
-      </datalist>
+      <div class="mentor-change-row">
+        <button type="button" class="secondary compact-btn" onclick="toggleMentorOverride('type')">CHANGE TYPE</button>
+        <button type="button" class="secondary compact-btn" onclick="toggleMentorOverride('location')">CHANGE LOCATION</button>
+      </div>
 
-      <button onclick="addMentorAvailability()">ADD AVAILABILITY</button>
+      <div id="mentorTypeOverride" class="mentor-override" style="display:none;">
+        <label class="field-label" for="mentorTypeSelect">Session Type</label>
+        <select id="mentorTypeSelect" onchange="updateMentorCurrentDetails()"></select>
+      </div>
+
+      <div id="mentorLocationOverride" class="mentor-override" style="display:none;">
+        <label class="field-label" for="mentorLocationSelect">Session Location</label>
+        <select id="mentorLocationSelect" onchange="updateMentorCurrentDetails()"></select>
+      </div>
+
+      <label class="field-label">Select one or more times</label>
+      <div id="mentorTimeButtons" class="time-choice-grid"></div>
+
+      <button id="addMentorSessionsButton" onclick="addMentorAvailability()">ADD AVAILABILITY</button>
 
       <button onclick="toggleSection('mentorAvailabilitySection')" class="secondary">MY AVAILABILITY</button>
-      <div id="mentorAvailabilitySection" style="display:none;">
-        <div id="mentorAvailabilityList"></div>
-      </div>
+      <div id="mentorAvailabilitySection" style="display:none;"><div id="mentorAvailabilityList"></div></div>
 
       <button onclick="toggleSection('mentorBookedSection')" class="secondary">MY BOOKED SESSIONS</button>
-      <div id="mentorBookedSection" style="display:none;">
-        <div id="mentorBookedSessions"></div>
-      </div>
+      <div id="mentorBookedSection" style="display:none;"><div id="mentorBookedSessions"></div></div>
 
-      <div class="logout-section">
-  <div class="logout-divider"></div>
-  <button onclick="logoutMentor()" class="logout-btn">LOG OUT</button>
+      <div class="logout-section"><div class="logout-divider"></div><button onclick="logoutMentor()" class="logout-btn">LOG OUT</button></div>
     </div>
-
   </div>
-
-  <footer>
-    Raving 4 A Reason | C.I.C REG 16251433
-  </footer>
-
- <script src="data.js"></script>
-
-  <!-- ✅ Load Supabase -->
+  <footer>Raving 4 A Reason | C.I.C REG 16251433</footer>
+  <script src="data.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
-  <!-- ✅ Then your app -->
   <script src="app.js"></script>
 </body>
 </html>
