@@ -11,6 +11,13 @@ const PARENT_USERNAME = "R4ARparent";
 const PARENT_PASSWORD = "R4AR";
 const DONATION_URL = "https://www.gofundme.com/f/buy-more-equipment-for-young-peoples-workshops-worksh?attribution_id=sl:e5544b21-38bf-4f5d-9b45-75d32cf8ef34&lang=en_GB&utm_campaign=fp_sharesheet&utm_medium=customer&utm_source=qr_code";
 
+const MENTOR_TIME_OPTIONS = [
+  "10:00", "11:00", "12:00", "13:00", "14:00",
+  "15:00", "16:00", "17:00", "18:00", "19:00", "20:00"
+];
+let mentorSelectedTimes = new Set();
+let mentorProfileOptions = { types: [], locations: [], defaultType: "", defaultLocation: "" };
+
 /* =========================
    HELPERS
 ========================= */
@@ -234,11 +241,9 @@ function showMentorPanel() {
   if (mentorPanel) mentorPanel.style.display = "block";
 
   const mentorWelcome = document.getElementById("mentorWelcome");
-  if (mentorWelcome && mentorName) {
-    mentorWelcome.textContent = `${mentorName} Portal`;
-  }
+  if (mentorWelcome && mentorName) mentorWelcome.textContent = `${mentorName} Portal`;
 
-  loadMentorLocations();
+  initialiseMentorAvailabilityForm();
   renderMentorAvailability();
   renderMentorBookedSessions();
 }
@@ -695,13 +700,11 @@ function getBookingData() {
   const parent = document.getElementById("parentName")?.value.trim() || "";
   const phone = document.getElementById("parentPhone")?.value.trim() || "";
   const email = document.getElementById("email")?.value.trim() || "";
+  const notes = document.getElementById("bookingNotes")?.value.trim() || "";
   const rawDate = params.get("date") || "";
 
   return {
-    child,
-    parent,
-    phone,
-    email,
+    child, parent, phone, email, notes,
     mentor: params.get("mentor") || "",
     type: params.get("type") || "",
     location: params.get("location") || "",
@@ -716,76 +719,52 @@ async function confirmBooking() {
   const booking = getBookingData();
   const consent = document.getElementById("gdprConsent")?.checked;
 
-  if (!consent) {
-    alert("Please confirm consent to continue");
-    return;
-  }
-
+  if (!consent) { alert("Please confirm consent to continue"); return; }
   if (!booking.child || !booking.parent || !booking.phone || !booking.email) {
-    alert("Please fill all details");
-    return;
+    alert("Please fill all details"); return;
   }
 
   const phone = booking.phone.replace(/\s/g, "");
+  if (!/^\d{10,13}$/.test(phone)) { alert("Please enter a valid phone number"); return; }
 
-  if (!/^\d{10,13}$/.test(phone)) {
-    alert("Please enter a valid phone number");
-    return;
-  }
-
-  const { error } = await db
-    .from("bookings")
-    .insert([{
-      child: booking.child,
-      parent: booking.parent,
-      phone: phone,
-      email: booking.email,
-      mentor: booking.mentor,
-      type: booking.type,
-      location: booking.location,
-      date: booking.rawDate,
-      time: booking.time,
-      paid: false
-    }]);
-
-  if (error) {
-    console.error(error);
-    alert("Error saving booking");
-    return;
-  }
-
-  await removeBookedSlot(booking);
-await fetch("/.netlify/functions/send-booking-email", {
-method: "POST",
-headers: {
-"Content-Type": "application/json"
-},
-body: JSON.stringify({
-booking: {
-child: booking.child,
-parent: booking.parent,
-phone: phone,
-date: booking.date,
-time: booking.time,
-location: booking.location,
-type: booking.type,
-parent_email: booking.email
-}
-})
-});
-
-  const params = new URLSearchParams({
+  const { error } = await db.from("bookings").insert([{
     child: booking.child,
     parent: booking.parent,
-    phone: phone,
+    phone,
     email: booking.email,
     mentor: booking.mentor,
     type: booking.type,
     location: booking.location,
     date: booking.rawDate,
-    time: booking.time
-  });
+    time: booking.time,
+    notes: booking.notes || null,
+    paid: false
+  }]);
 
+  if (error) { console.error(error); alert("Error saving booking"); return; }
+
+  await removeBookedSlot(booking);
+
+  try {
+    await fetch("/.netlify/functions/send-booking-email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ booking: {
+        child: booking.child, parent: booking.parent, phone,
+        date: booking.date, time: booking.time, location: booking.location,
+        type: booking.type, mentor: booking.mentor,
+        notes: booking.notes, parent_email: booking.email
+      }})
+    });
+  } catch (emailError) {
+    console.error("Booking saved but email failed:", emailError);
+  }
+
+  const params = new URLSearchParams({
+    child: booking.child, parent: booking.parent, phone, email: booking.email,
+    mentor: booking.mentor, type: booking.type, location: booking.location,
+    date: booking.rawDate, time: booking.time
+  });
   window.location.href = `confirmed.html?${params.toString()}`;
 }
 
@@ -1126,21 +1105,10 @@ async function removeLocation(id) {
 async function renderBookedSessions() {
   const container = document.getElementById("adminBookedSessions");
   if (!container) return;
-
-  const { data, error } = await db
-    .from("bookings")
-    .select("*")
-    .order("date", { ascending: true })
-    .order("time", { ascending: true });
-
-  if (error) {
-    console.error(error);
-    container.innerHTML = "<p>Error loading bookings.</p>";
-    return;
-  }
-
+  const { data, error } = await db.from("bookings").select("*")
+    .order("date", { ascending: true }).order("time", { ascending: true });
+  if (error) { console.error(error); container.innerHTML = "<p>Error loading bookings.</p>"; return; }
   let html = "";
-
   (data || []).forEach(booking => {
     html += `
       <div class="slot-card">
@@ -1150,17 +1118,14 @@ async function renderBookedSessions() {
         <p>${booking.location}</p>
         <p>${formatDisplayDate(booking.date)}</p>
         <p>${booking.time}</p>
-
+        ${booking.notes ? `<div class="booking-notes"><strong>Parent notes:</strong><br>${escapeHtml(booking.notes)}</div>` : ""}
         <label class="paid-box">
           <input type="checkbox" ${booking.paid ? "checked" : ""} onchange="togglePaid('${booking.id}', ${booking.paid})">
           Studio Booked / Paid
         </label>
-
         <button onclick="removeBookedSession('${booking.id}')">REMOVE BOOKING</button>
-      </div>
-    `;
+      </div>`;
   });
-
   container.innerHTML = html || "<p>No booked sessions yet.</p>";
 }
 
@@ -1200,35 +1165,25 @@ async function removeBookedSession(id) {
 async function renderMentorBookedSessions() {
   const container = document.getElementById("mentorBookedSessions");
   const mentorName = getLoggedInMentorName();
-
   if (!container || !mentorName) return;
 
-  const { data, error } = await db
-    .from("bookings")
-    .select("*")
+  const { data, error } = await db.from("bookings").select("*")
     .eq("mentor", mentorName)
-    .order("date", { ascending: true })
-    .order("time", { ascending: true });
-
-  if (error) {
-    console.error(error);
-    container.innerHTML = "<p>Error loading bookings.</p>";
-    return;
-  }
+    .gte("date", getTodayDate())
+    .order("date", { ascending: true }).order("time", { ascending: true });
+  if (error) { console.error(error); container.innerHTML = "<p>Error loading bookings.</p>"; return; }
 
   let html = "";
-
   (data || []).forEach(booking => {
     html += `
       <div class="slot-card">
         <p><strong>${booking.child}</strong></p>
+        <p>${booking.type}</p>
         <p>${booking.location}</p>
-        <p>${formatDisplayDate(booking.date)}</p>
-        <p>${booking.time}</p>
-      </div>
-    `;
+        <p>${formatDisplayDate(booking.date)} at ${booking.time}</p>
+        ${booking.notes ? `<div class="booking-notes"><strong>Notes from parent:</strong><br>${escapeHtml(booking.notes)}</div>` : ""}
+      </div>`;
   });
-
   container.innerHTML = html || "<p>No booked sessions yet.</p>";
 }
 
@@ -1237,108 +1192,75 @@ async function renderMentorBookedSessions() {
 ========================= */
 
 async function loadMentorLocations() {
-  const mentorLocationList = document.getElementById("mentorLocationList");
-  if (!mentorLocationList) return;
-
-  const { data, error } = await db
-    .from("locations")
-    .select("*")
-    .order("name", { ascending: true });
-
-  if (error) {
-    console.error(error);
-    return;
-  }
-
-  mentorLocationList.innerHTML = "";
-  (data || []).forEach(location => {
-    mentorLocationList.innerHTML += `<option value="${location.name}">`;
-  });
+  await initialiseMentorAvailabilityForm();
 }
 
 async function getMentorType(mentorName) {
-  const { data, error } = await db
-    .from("mentors")
-    .select("*")
-    .eq("name", mentorName)
-    .limit(1);
-
-  if (error || !data || data.length === 0) return "";
-
-  return data[0].type;
+  const { data, error } = await db.from("mentors").select("type").eq("name", mentorName).limit(1);
+  if (error || !data || !data.length) return "";
+  return data[0].type || "";
 }
 
 async function addMentorAvailability() {
   const mentorName = getLoggedInMentorName();
   const date = document.getElementById("mentorDate")?.value || "";
-  const location = document.getElementById("mentorLocation")?.value.trim() || "";
-  const time = document.getElementById("mentorTime")?.value || "";
+  const type = document.getElementById("mentorTypeSelect")?.value || mentorProfileOptions.defaultType;
+  const location = document.getElementById("mentorLocationSelect")?.value || mentorProfileOptions.defaultLocation;
+  const times = [...mentorSelectedTimes].sort();
 
-  if (!mentorName || !date || !location || !time) {
-    alert("Please fill all fields");
+  if (!mentorName || !date || !type || !location || times.length === 0) {
+    alert("Please choose a date and at least one time");
     return;
   }
 
-  const type = await getMentorType(mentorName);
+  const { data: existing, error: existingError } = await db.from("sessions")
+    .select("time").eq("mentor", mentorName).eq("date", date)
+    .eq("type", type).eq("location", location).in("time", times);
+  if (existingError) { console.error(existingError); alert("Error checking existing sessions"); return; }
 
-  if (!type) {
-    alert("Mentor type not found");
-    return;
-  }
+  const existingTimes = new Set((existing || []).map(row => row.time));
+  const rows = times.filter(time => !existingTimes.has(time)).map(time => ({
+    date, type, mentor: mentorName, location, time
+  }));
 
-  const { error } = await db
-    .from("sessions")
-    .insert([{ date, type, mentor: mentorName, location, time }]);
+  if (!rows.length) { alert("Those sessions have already been added"); return; }
 
-  if (error) {
-    console.error(error);
-    alert("Error adding availability");
-    return;
-  }
+  const { error } = await db.from("sessions").insert(rows);
+  if (error) { console.error(error); alert("Error adding availability"); return; }
 
-  renderMentorAvailability();
-  renderAdminSlots();
-  loadCalendar();
-  loadDashboard();
-
+  const skipped = times.length - rows.length;
+  mentorSelectedTimes.clear();
+  renderMentorTimeButtons();
+  updateMentorAddButton();
+  await renderMentorAvailability();
+  renderAdminSlots(); loadCalendar(); loadDashboard();
   document.getElementById("mentorDate").value = "";
-  document.getElementById("mentorLocation").value = "";
-  document.getElementById("mentorTime").value = "";
+  alert(`${rows.length} session${rows.length === 1 ? "" : "s"} added${skipped ? ` (${skipped} duplicate skipped)` : ""}`);
 }
 
 async function renderMentorAvailability() {
   const container = document.getElementById("mentorAvailabilityList");
   const mentorName = getLoggedInMentorName();
-
   if (!container || !mentorName) return;
 
-  const { data, error } = await db
-    .from("sessions")
-    .select("*")
-    .eq("mentor", mentorName)
-    .gte("date", getTodayDate())
-    .order("date", { ascending: true })
-    .order("time", { ascending: true });
-
-  if (error) {
-    console.error(error);
-    container.innerHTML = "<p>Error loading availability.</p>";
-    return;
-  }
+  const { data, error } = await db.from("sessions").select("*")
+    .eq("mentor", mentorName).gte("date", getTodayDate())
+    .order("date", { ascending: true }).order("time", { ascending: true });
+  if (error) { console.error(error); container.innerHTML = "<p>Error loading availability.</p>"; return; }
 
   let html = "";
-
   (data || []).forEach(slot => {
     html += `
       <div class="slot-card">
         <p><strong>${formatDisplayDate(slot.date)}</strong></p>
-        <p>${slot.location}</p>
+        <p>${slot.type} — ${slot.location}</p>
         <p>${slot.time}</p>
-        <button onclick="removeMentorAvailability('${slot.id}')">REMOVE</button>
-      </div>
-    `;
+        <div class="session-actions">
+          <button class="small-edit-btn" onclick='editMentorAvailability(${JSON.stringify(slot)})'>EDIT</button>
+          <button class="small-danger-btn" onclick="removeMentorAvailability('${slot.id}')">DELETE</button>
+        </div>
+      </div>`;
   });
-
   container.innerHTML = html || "<p>No availability added yet.</p>";
 }
 
@@ -1358,6 +1280,105 @@ async function removeMentorAvailability(id) {
   renderAdminSlots();
   loadCalendar();
   loadDashboard();
+}
+
+
+async function initialiseMentorAvailabilityForm() {
+  const mentorName = getLoggedInMentorName();
+  const typeSelect = document.getElementById("mentorTypeSelect");
+  const locationSelect = document.getElementById("mentorLocationSelect");
+  if (!mentorName || !typeSelect || !locationSelect) return;
+
+  const [{ data: mentorRows, error: mentorError }, { data: allLocations, error: locationError }] = await Promise.all([
+    db.from("mentors").select("type, location").eq("name", mentorName),
+    db.from("locations").select("name").order("name", { ascending: true })
+  ]);
+  if (mentorError || locationError) { console.error(mentorError || locationError); return; }
+
+  const rows = mentorRows || [];
+  const types = [...new Set(rows.map(r => r.type).filter(Boolean))];
+  const ownLocations = rows.map(r => r.location).filter(Boolean);
+  const locations = [...new Set([...ownLocations, ...(allLocations || []).map(r => r.name).filter(Boolean)])].sort();
+
+  mentorProfileOptions = {
+    types,
+    locations,
+    defaultType: types[0] || "",
+    defaultLocation: ownLocations[0] || locations[0] || ""
+  };
+
+  typeSelect.innerHTML = types.map(type => `<option value="${escapeHtml(type)}">${escapeHtml(type)}</option>`).join("");
+  locationSelect.innerHTML = locations.map(location => `<option value="${escapeHtml(location)}">${escapeHtml(location)}</option>`).join("");
+  typeSelect.value = mentorProfileOptions.defaultType;
+  locationSelect.value = mentorProfileOptions.defaultLocation;
+  updateMentorCurrentDetails();
+  renderMentorTimeButtons();
+}
+
+function renderMentorTimeButtons() {
+  const container = document.getElementById("mentorTimeButtons");
+  if (!container) return;
+  container.innerHTML = MENTOR_TIME_OPTIONS.map(time => `
+    <button type="button" class="time-choice ${mentorSelectedTimes.has(time) ? "selected" : ""}"
+      onclick="toggleMentorTime('${time}')">${time}</button>`).join("");
+}
+
+function toggleMentorTime(time) {
+  if (mentorSelectedTimes.has(time)) mentorSelectedTimes.delete(time);
+  else mentorSelectedTimes.add(time);
+  renderMentorTimeButtons();
+  updateMentorAddButton();
+}
+
+function updateMentorAddButton() {
+  const button = document.getElementById("addMentorSessionsButton");
+  if (!button) return;
+  const count = mentorSelectedTimes.size;
+  button.textContent = count ? `ADD ${count} SESSION${count === 1 ? "" : "S"}` : "ADD AVAILABILITY";
+}
+
+function updateMentorCurrentDetails() {
+  const type = document.getElementById("mentorTypeSelect")?.value || "";
+  const location = document.getElementById("mentorLocationSelect")?.value || "";
+  const typeText = document.getElementById("mentorCurrentType");
+  const locationText = document.getElementById("mentorCurrentLocation");
+  if (typeText) typeText.textContent = type || "Not set";
+  if (locationText) locationText.textContent = location || "Not set";
+}
+
+function toggleMentorOverride(field) {
+  const box = document.getElementById(field === "type" ? "mentorTypeOverride" : "mentorLocationOverride");
+  if (!box) return;
+  box.style.display = box.style.display === "none" || !box.style.display ? "block" : "none";
+}
+
+async function editMentorAvailability(slot) {
+  const newDate = prompt("Session date (YYYY-MM-DD)", slot.date);
+  if (newDate === null) return;
+  const newTime = prompt("Session time (HH:MM)", slot.time);
+  if (newTime === null) return;
+  const newType = prompt("Session type", slot.type);
+  if (newType === null) return;
+  const newLocation = prompt("Session location", slot.location);
+  if (newLocation === null) return;
+
+  if (!newDate.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(newDate.trim()) ||
+      !newTime.trim() || !/^\d{2}:\d{2}$/.test(newTime.trim()) ||
+      !newType.trim() || !newLocation.trim()) {
+    alert("Please enter a valid date, time, type and location"); return;
+  }
+
+  const { error } = await db.from("sessions").update({
+    date: newDate.trim(), time: newTime.trim(), type: newType.trim(), location: newLocation.trim()
+  }).eq("id", slot.id);
+  if (error) { console.error(error); alert("Error updating session"); return; }
+  renderMentorAvailability(); renderAdminSlots(); loadCalendar(); loadDashboard();
+}
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>'"]/g, char => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;"
+  })[char]);
 }
 
 /* =========================
