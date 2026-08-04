@@ -10,58 +10,123 @@
   <meta name="theme-color" content="#000000">
 </head>
 <body>
-  <div class="logo-wrap"><img src="r4ar.png" alt="Raving 4 A Reason" class="logo"></div>
-  <div class="container">
+  <div class="logo-wrap">
+    <img src="r4ar.png" alt="Raving 4 A Reason" class="logo">
+  </div>
+
+  <div class="container mentor-container">
     <div id="mentorLoginBox">
       <h1>Mentor Login</h1>
-      <input type="text" id="mentorUsername" placeholder="Mentor Name">
-      <input type="password" id="mentorPassword" placeholder="Password">
+      <input type="text" id="mentorUsername" placeholder="Mentor Name" autocomplete="username">
+      <input type="password" id="mentorPassword" placeholder="Password" autocomplete="current-password">
       <button onclick="loginMentor()">LOGIN</button>
-      <p class="helper-text">Username: your mentor name<br>Default password: Mentor</p>
     </div>
 
     <div id="mentorPanel" style="display:none;">
-      <h1 id="mentorWelcome">Mentor Portal</h1>
-      <h2>Add Availability</h2>
-
-      <label class="field-label" for="mentorDate">Date</label>
-      <input type="date" id="mentorDate">
-
-      <div class="mentor-current-details">
-        <p><strong>Type:</strong> <span id="mentorCurrentType">Loading…</span></p>
-        <p><strong>Location:</strong> <span id="mentorCurrentLocation">Loading…</span></p>
+      <div class="mentor-hero">
+        <p id="mentorToday" class="mentor-date"></p>
+        <h1 id="mentorWelcome">Welcome 👋</h1>
+        <p class="mentor-summary-intro">You currently have:</p>
+        <div id="mentorSummary" class="mentor-summary"></div>
       </div>
 
-      <div class="mentor-change-row">
-        <button type="button" class="secondary compact-btn" onclick="toggleMentorOverride('type')">CHANGE TYPE</button>
-        <button type="button" class="secondary compact-btn" onclick="toggleMentorOverride('location')">CHANGE LOCATION</button>
+      <div id="mentorNextBooking"></div>
+
+      <button onclick="toggleSection('addAvailabilitySection')" class="mentor-menu-btn">➕ ADD AVAILABILITY</button>
+      <section id="addAvailabilitySection" class="mentor-section" style="display:none;">
+        <h2>Add Availability</h2>
+        <label class="field-label" for="mentorDate">Date</label>
+        <input type="date" id="mentorDate">
+
+        <label class="field-label" for="mentorTypeSelect">Type</label>
+        <select id="mentorTypeSelect">
+          <option value="DJ">DJ</option>
+          <option value="MC">MC</option>
+          <option value="Production">Production</option>
+        </select>
+
+        <label class="field-label" for="mentorLocationSelect">Location</label>
+        <select id="mentorLocationSelect">
+          <option value="">Select location</option>
+        </select>
+
+        <label class="field-label">Select one or more times</label>
+        <div id="mentorTimeButtons" class="time-grid"></div>
+
+        <button id="addMentorSessionsBtn" onclick="addMentorAvailability()">ADD SESSIONS</button>
+      </section>
+
+      <button onclick="toggleSection('mentorAvailabilitySection')" class="mentor-menu-btn">📅 MY AVAILABILITY</button>
+      <section id="mentorAvailabilitySection" class="mentor-section" style="display:none;">
+        <div id="mentorAvailabilityList"></div>
+      </section>
+
+      <button onclick="toggleSection('mentorBookedSection')" class="mentor-menu-btn">👥 MY BOOKED SESSIONS</button>
+      <section id="mentorBookedSection" class="mentor-section" style="display:none;">
+        <div id="mentorBookedSessions"></div>
+      </section>
+
+      <button onclick="toggleSection('mentorMessagesSection')" class="mentor-menu-btn">💬 MESSAGES <span id="mentorMessageBadge"></span></button>
+      <section id="mentorMessagesSection" class="mentor-section" style="display:none;">
+        <div id="mentorMessages"></div>
+      </section>
+
+      <button onclick="toggleSection('mentorNewsletterSection')" class="mentor-menu-btn">📰 NEWSLETTER</button>
+      <section id="mentorNewsletterSection" class="mentor-section" style="display:none;">
+        <div id="mentorNewsletter"></div>
+      </section>
+
+      <button onclick="toggleSection('mentorExpensesSection')" class="mentor-menu-btn">💷 EXPENSES</button>
+      <section id="mentorExpensesSection" class="mentor-section" style="display:none;">
+        <h2>Submit Expense</h2>
+
+        <label class="field-label" for="expenseType">Expense Type</label>
+        <select id="expenseType" onchange="updateExpenseFields()">
+          <option value="mileage">Mileage Claim</option>
+          <option value="receipt">Receipt / Other Expense</option>
+        </select>
+
+        <label class="field-label" for="expenseDate">Date</label>
+        <input type="date" id="expenseDate">
+
+        <div id="mileageFields">
+          <input type="number" id="expenseMiles" min="0" step="0.1" placeholder="Miles travelled">
+        </div>
+
+        <div id="receiptFields" style="display:none;">
+          <input type="number" id="expenseAmount" min="0" step="0.01" placeholder="Amount (£)">
+          <select id="expenseCategory">
+            <option value="Fuel">Fuel</option>
+            <option value="Parking">Parking</option>
+            <option value="Food">Food</option>
+            <option value="Equipment">Equipment</option>
+            <option value="Other">Other</option>
+          </select>
+          <label class="field-label" for="expenseReceipt">Upload receipt (optional)</label>
+          <input type="file" id="expenseReceipt" accept="image/*,.pdf">
+        </div>
+
+        <textarea id="expenseReason" class="mentor-textarea" placeholder="Reason / details"></textarea>
+        <button onclick="submitMentorExpense()">SUBMIT EXPENSE</button>
+
+        <h2>My Expense Claims</h2>
+        <div id="mentorExpenseList"></div>
+      </section>
+
+      <button onclick="toggleSection('mentorProfileSection')" class="mentor-menu-btn">👤 PROFILE</button>
+      <section id="mentorProfileSection" class="mentor-section" style="display:none;">
+        <div id="mentorProfile"></div>
+      </section>
+
+      <div class="logout-section">
+        <div class="logout-divider"></div>
+        <button onclick="logoutMentor()" class="logout-btn">LOG OUT</button>
       </div>
-
-      <div id="mentorTypeOverride" class="mentor-override" style="display:none;">
-        <label class="field-label" for="mentorTypeSelect">Session Type</label>
-        <select id="mentorTypeSelect" onchange="updateMentorCurrentDetails()"></select>
-      </div>
-
-      <div id="mentorLocationOverride" class="mentor-override" style="display:none;">
-        <label class="field-label" for="mentorLocationSelect">Session Location</label>
-        <select id="mentorLocationSelect" onchange="updateMentorCurrentDetails()"></select>
-      </div>
-
-      <label class="field-label">Select one or more times</label>
-      <div id="mentorTimeButtons" class="time-choice-grid"></div>
-
-      <button id="addMentorSessionsButton" onclick="addMentorAvailability()">ADD AVAILABILITY</button>
-
-      <button onclick="toggleSection('mentorAvailabilitySection')" class="secondary">MY AVAILABILITY</button>
-      <div id="mentorAvailabilitySection" style="display:none;"><div id="mentorAvailabilityList"></div></div>
-
-      <button onclick="toggleSection('mentorBookedSection')" class="secondary">MY BOOKED SESSIONS</button>
-      <div id="mentorBookedSection" style="display:none;"><div id="mentorBookedSessions"></div></div>
-
-      <div class="logout-section"><div class="logout-divider"></div><button onclick="logoutMentor()" class="logout-btn">LOG OUT</button></div>
     </div>
   </div>
+
   <footer>Raving 4 A Reason | C.I.C REG 16251433</footer>
+
   <script src="data.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="app.js"></script>
