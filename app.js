@@ -158,7 +158,6 @@ function showAdminPanel() {
   renderAdminMentors();
   renderAdminLocations();
   renderMembers();
-  renderAdminExpenses();
   loadDashboard();
 }
 
@@ -1387,10 +1386,20 @@ async function loadMentorProfileAndDefaults() {
 
   if (mentorProfileCache.profile_image_url) {
     if (avatarImage) {
-      avatarImage.src = mentorProfileCache.profile_image_url;
-      avatarImage.style.display = "block";
+      const imageUrl = `${mentorProfileCache.profile_image_url}${mentorProfileCache.profile_image_url.includes("?") ? "&" : "?"}v=${Date.now()}`;
+      avatarImage.onload = () => {
+        avatarImage.style.display = "block";
+        if (avatarInitials) avatarInitials.style.display = "none";
+      };
+      avatarImage.onerror = () => {
+        avatarImage.style.display = "none";
+        if (avatarInitials) {
+          avatarInitials.textContent = initials || "M";
+          avatarInitials.style.display = "flex";
+        }
+      };
+      avatarImage.src = imageUrl;
     }
-    if (avatarInitials) avatarInitials.style.display = "none";
   } else {
     if (avatarImage) avatarImage.style.display = "none";
     if (avatarInitials) {
@@ -1421,19 +1430,33 @@ function openMentorProfile() {
 }
 
 async function saveMentorProfile() {
-  if (!mentorProfileCache) {
+  if (!mentorProfileCache?.id) {
     alert("Mentor profile not loaded");
     return;
   }
 
+  const oldName = mentorProfileCache.name;
+  const name = document.getElementById("profileName")?.value.trim() || "";
+  const artistName = document.getElementById("profileArtistName")?.value.trim() || "";
   const email = document.getElementById("profileEmail")?.value.trim() || "";
-  const matchColumn = mentorProfileCache.id ? "id" : "name";
-  const matchValue = mentorProfileCache.id || mentorProfileCache.name;
+  const type = document.getElementById("profileDefaultType")?.value || "";
+  const location = document.getElementById("profileDefaultLocation")?.value || "";
+
+  if (!name || !type || !location) {
+    alert("Please enter your name, default type and default location");
+    return;
+  }
 
   const { error } = await db
     .from("mentors")
-    .update({ email: email || null })
-    .eq(matchColumn, matchValue);
+    .update({
+      name,
+      artist_name: artistName || null,
+      email: email || null,
+      type,
+      location
+    })
+    .eq("id", mentorProfileCache.id);
 
   if (error) {
     console.error(error);
@@ -1441,13 +1464,26 @@ async function saveMentorProfile() {
     return;
   }
 
-  mentorProfileCache.email = email || null;
+  if (oldName !== name) {
+    const relatedUpdates = [
+      db.from("sessions").update({ mentor: name }).eq("mentor", oldName),
+      db.from("bookings").update({ mentor: name }).eq("mentor", oldName),
+      db.from("messages").update({ mentor: name }).eq("mentor", oldName),
+      db.from("expenses").update({ mentor: name }).eq("mentor", oldName)
+    ];
+    const results = await Promise.allSettled(relatedUpdates);
+    results.forEach(result => {
+      if (result.status === "rejected") console.error(result.reason);
+    });
+    localStorage.setItem("mentorName", name);
+  }
+
   alert("Profile updated");
-  await loadMentorProfileAndDefaults();
+  await initialiseMentorPortal();
 }
 
 async function uploadMentorProfileImage() {
-  if (!mentorProfileCache) {
+  if (!mentorProfileCache?.id) {
     alert("Mentor profile not loaded");
     return;
   }
@@ -1467,10 +1503,9 @@ async function uploadMentorProfileImage() {
     return;
   }
 
-  const profileKey = mentorProfileCache.id || mentorProfileCache.name.replace(/[^a-zA-Z0-9_-]/g, "_");
   const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
   const safeExt = ["jpg","jpeg","png","webp","gif"].includes(ext) ? ext : "jpg";
-  const path = `${profileKey}/profile-${Date.now()}.${safeExt}`;
+  const path = `${mentorProfileCache.id}/profile-${Date.now()}.${safeExt}`;
 
   const { error: uploadError } = await db.storage
     .from("mentor-profile-images")
@@ -1484,12 +1519,10 @@ async function uploadMentorProfileImage() {
 
   const { data } = db.storage.from("mentor-profile-images").getPublicUrl(path);
   const publicUrl = data?.publicUrl || "";
-  const matchColumn = mentorProfileCache.id ? "id" : "name";
-  const matchValue = mentorProfileCache.id || mentorProfileCache.name;
   const { error: updateError } = await db
     .from("mentors")
     .update({ profile_image_url: publicUrl })
-    .eq(matchColumn, matchValue);
+    .eq("id", mentorProfileCache.id);
 
   if (updateError) {
     console.error(updateError);
@@ -1498,20 +1531,24 @@ async function uploadMentorProfileImage() {
   }
 
   mentorProfileCache.profile_image_url = publicUrl;
+
   const avatarImage = document.getElementById("mentorAvatarImage");
   const avatarInitials = document.getElementById("mentorAvatarInitials");
   if (avatarImage) {
-    avatarImage.src = `${publicUrl}?v=${Date.now()}`;
+    const previewUrl = URL.createObjectURL(file);
+    avatarImage.onload = () => URL.revokeObjectURL(previewUrl);
+    avatarImage.src = previewUrl;
     avatarImage.style.display = "block";
   }
   if (avatarInitials) avatarInitials.style.display = "none";
+
   if (input) input.value = "";
   alert("Profile image updated");
   await loadMentorProfileAndDefaults();
 }
 
 async function changeMentorPassword() {
-  if (!mentorProfileCache) {
+  if (!mentorProfileCache?.id) {
     alert("Mentor profile not loaded");
     return;
   }
@@ -1547,7 +1584,7 @@ async function changeMentorPassword() {
   const { error } = await db
     .from("mentors")
     .update({ password_hash: newHash })
-    .eq(mentorProfileCache.id ? "id" : "name", mentorProfileCache.id || mentorProfileCache.name);
+    .eq("id", mentorProfileCache.id);
 
   if (error) {
     console.error(error);
@@ -1606,7 +1643,7 @@ async function addMentorAvailability() {
     return;
   }
 
-  alert(`✅ ${newTimes.length} session${newTimes.length === 1 ? "" : "s"} added successfully\n\n${formatDisplayDate(date)}\n\n${newTimes.join("\n")}`);
+  alert(`✅ ${newTimes.length} session${newTimes.length === 1 ? "" : "s"} added:\n${newTimes.join(", ")}`);
   clearSelectedMentorTimes();
 
   await Promise.all([
@@ -1823,21 +1860,12 @@ async function renderMentorNewsletter() {
   `).join("") || "<p>No newsletter has been uploaded yet.</p>";
 }
 
-const DEFAULT_MILEAGE_RATE = 0.45;
-
-function updateMileageAmount() {
-  const miles = Number(document.getElementById("expenseMiles")?.value || 0);
-  const output = document.getElementById("mileageClaimAmount");
-  if (output) output.textContent = `£${(miles * DEFAULT_MILEAGE_RATE).toFixed(2)}`;
-}
-
 function updateExpenseFields() {
   const type = document.getElementById("expenseType")?.value || "mileage";
   const mileage = document.getElementById("mileageFields");
   const receipt = document.getElementById("receiptFields");
   if (mileage) mileage.style.display = type === "mileage" ? "block" : "none";
   if (receipt) receipt.style.display = type === "receipt" ? "block" : "none";
-  updateMileageAmount();
 }
 
 async function submitMentorExpense() {
@@ -1846,8 +1874,7 @@ async function submitMentorExpense() {
   const expenseDate = document.getElementById("expenseDate")?.value || "";
   const reason = document.getElementById("expenseReason")?.value.trim() || "";
   const miles = Number(document.getElementById("expenseMiles")?.value || 0);
-  const manualAmount = Number(document.getElementById("expenseAmount")?.value || 0);
-  const amount = expenseType === "mileage" ? Number((miles * DEFAULT_MILEAGE_RATE).toFixed(2)) : manualAmount;
+  const amount = Number(document.getElementById("expenseAmount")?.value || 0);
   const category = document.getElementById("expenseCategory")?.value || null;
   const receiptFile = document.getElementById("expenseReceipt")?.files?.[0] || null;
 
@@ -1882,12 +1909,11 @@ async function submitMentorExpense() {
     expense_type: expenseType,
     expense_date: expenseDate,
     miles: expenseType === "mileage" ? miles : null,
-    amount,
-    mileage_rate: expenseType === "mileage" ? DEFAULT_MILEAGE_RATE : null,
+    amount: expenseType === "receipt" ? amount : null,
     category: expenseType === "receipt" ? category : "Mileage",
     reason,
     receipt_url: receiptUrl,
-    status: "Submitted"
+    status: "Pending"
   }]);
 
   if (error) {
@@ -1901,30 +1927,6 @@ async function submitMentorExpense() {
   document.getElementById("expenseReason").value = "";
   document.getElementById("expenseReceipt").value = "";
   await renderMentorExpenses();
-
-  try {
-    await fetch("/.netlify/functions/send-expense-email", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        expense: {
-          mentor,
-          expense_type: expenseType,
-          expense_date: expenseDate,
-          miles: expenseType === "mileage" ? miles : null,
-          mileage_rate: expenseType === "mileage" ? DEFAULT_MILEAGE_RATE : null,
-          amount,
-          category: expenseType === "receipt" ? category : "Mileage",
-          reason,
-          receipt_url: receiptUrl
-        }
-      })
-    });
-  } catch (emailError) {
-    console.warn("Expense saved but email notification failed", emailError);
-  }
-
-  updateMileageAmount();
   alert("Expense submitted");
 }
 
@@ -1950,66 +1952,12 @@ async function renderMentorExpenses() {
       <p><strong>${escapeHtml(item.category || item.expense_type)}</strong></p>
       <p>${formatDisplayDate(item.expense_date)}</p>
       ${item.miles ? `<p>${item.miles} miles</p>` : ""}
-      <p><strong>£${Number(item.amount || 0).toFixed(2)}</strong></p>
+      ${item.amount ? `<p>£${Number(item.amount).toFixed(2)}</p>` : ""}
       <p>${escapeHtml(item.reason || "")}</p>
-      <p>Status: <strong>${escapeHtml(item.status || "Submitted")}</strong></p>
-      <p>${item.status === "Paid" && item.paid_at ? `Paid ${formatShortDate(item.paid_at)}` : `Submitted ${formatShortDate(item.created_at || item.expense_date)}`}</p>
+      <p>Status: <strong>${escapeHtml(item.status || "Pending")}</strong></p>
       ${item.receipt_url ? `<a class="download-link" href="${escapeHtml(item.receipt_url)}" target="_blank" rel="noopener">VIEW RECEIPT</a>` : ""}
     </div>
   `).join("") || "<p>No expense claims submitted.</p>";
-}
-
-/* =========================
-   ADMIN EXPENSES
-========================= */
-
-async function renderAdminExpenses() {
-  const container = document.getElementById("adminExpenses");
-  if (!container) return;
-
-  const { data, error } = await db
-    .from("expenses")
-    .select("*")
-    .order("created_at", { ascending: false });
-
-  if (error) {
-    console.error(error);
-    container.innerHTML = "<p>Error loading expenses.</p>";
-    return;
-  }
-
-  container.innerHTML = (data || []).map(item => `
-    <div class="slot-card expense-card">
-      <p><strong>${escapeHtml(item.mentor || "Mentor")}</strong></p>
-      <p>£${Number(item.amount || 0).toFixed(2)}</p>
-      <p>${escapeHtml(item.status || "Submitted")}</p>
-      <p>${formatShortDate(item.status === "Paid" && item.paid_at ? item.paid_at : item.created_at || item.expense_date)}</p>
-      <details>
-        <summary>View details</summary>
-        <p>${escapeHtml(item.expense_type === "mileage" ? "Mileage claim" : item.category || "Expense")}</p>
-        ${item.miles ? `<p>${item.miles} miles at £${Number(item.mileage_rate || DEFAULT_MILEAGE_RATE).toFixed(2)} per mile</p>` : ""}
-        <p>${escapeHtml(item.reason || "")}</p>
-        ${item.receipt_url ? `<a class="download-link" href="${escapeHtml(item.receipt_url)}" target="_blank" rel="noopener">VIEW RECEIPT</a>` : ""}
-      </details>
-      ${item.status !== "Paid" ? `<button onclick="markExpensePaid('${item.id}')">MARK AS PAID</button>` : ""}
-    </div>
-  `).join("") || "<p>No expense claims submitted.</p>";
-}
-
-async function markExpensePaid(id) {
-  if (!confirm("Mark this expense as paid?")) return;
-  const { error } = await db
-    .from("expenses")
-    .update({ status: "Paid", paid_at: new Date().toISOString() })
-    .eq("id", id);
-
-  if (error) {
-    console.error(error);
-    alert("Error updating expense");
-    return;
-  }
-
-  await Promise.all([renderAdminExpenses(), renderMentorExpenses()]);
 }
 
 /* =========================
