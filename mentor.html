@@ -24,6 +24,10 @@
 
     <div id="mentorPanel" style="display:none;">
       <div class="mentor-hero">
+        <button id="mentorAvatarButton" class="mentor-avatar-button" type="button" onclick="openMentorProfile()" aria-label="Open profile">
+          <img id="mentorAvatarImage" class="mentor-avatar-image" alt="Mentor profile">
+          <span id="mentorAvatarInitials" class="mentor-avatar-initials">M</span>
+        </button>
         <p id="mentorToday" class="mentor-date"></p>
         <h1 id="mentorWelcome">Welcome 👋</h1>
         <p class="mentor-summary-intro">You currently have:</p>
@@ -113,9 +117,47 @@
         <div id="mentorExpenseList"></div>
       </section>
 
-      <button onclick="toggleSection('mentorProfileSection')" class="mentor-menu-btn">👤 PROFILE</button>
-      <section id="mentorProfileSection" class="mentor-section" style="display:none;">
-        <div id="mentorProfile"></div>
+      <section id="mentorProfileSection" class="mentor-section mentor-profile-section" style="display:none;">
+        <div class="profile-header-row">
+          <h2>My Profile</h2>
+          <button type="button" class="profile-close-btn" onclick="openMentorProfile()" aria-label="Close profile">×</button>
+        </div>
+
+        <div class="profile-photo-editor">
+          <label class="field-label" for="mentorProfileImageInput">Profile image</label>
+          <input type="file" id="mentorProfileImageInput" accept="image/*">
+          <button type="button" class="secondary compact-btn" onclick="uploadMentorProfileImage()">UPLOAD / CHANGE IMAGE</button>
+        </div>
+
+        <label class="field-label" for="profileName">Name</label>
+        <input type="text" id="profileName" placeholder="Name">
+
+        <label class="field-label" for="profileArtistName">Artist Name</label>
+        <input type="text" id="profileArtistName" placeholder="Artist name (optional)">
+
+        <label class="field-label" for="profileEmail">Email</label>
+        <input type="email" id="profileEmail" placeholder="Email address">
+
+        <label class="field-label" for="profileDefaultType">Default Type</label>
+        <select id="profileDefaultType">
+          <option value="DJ">DJ</option>
+          <option value="MC">MC</option>
+          <option value="Production">Production</option>
+        </select>
+
+        <label class="field-label" for="profileDefaultLocation">Default Location</label>
+        <select id="profileDefaultLocation">
+          <option value="">Select location</option>
+        </select>
+
+        <button type="button" onclick="saveMentorProfile()">SAVE PROFILE</button>
+
+        <div class="profile-divider"></div>
+        <h2>Change Password</h2>
+        <input type="password" id="mentorCurrentPassword" placeholder="Current password" autocomplete="current-password">
+        <input type="password" id="mentorNewPassword" placeholder="New password" autocomplete="new-password">
+        <input type="password" id="mentorConfirmPassword" placeholder="Confirm new password" autocomplete="new-password">
+        <button type="button" class="secondary" onclick="changeMentorPassword()">CHANGE PASSWORD</button>
       </section>
 
       <div class="logout-section">
