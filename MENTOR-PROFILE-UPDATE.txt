@@ -1,0 +1,9 @@
+MENTOR PROFILE UPDATE
+
+1. Run mentor-portal-v2.sql in Supabase SQL Editor.
+2. Replace app.js, mentor.html and styles.css in GitHub.
+3. Commit and wait for Netlify to deploy.
+4. Test mentor login with the existing temporary password Mentor.
+5. Open the small avatar at the top-right to edit profile details, upload a picture, set default type/location and change password.
+
+No new Netlify environment variables are required.

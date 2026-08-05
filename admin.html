@@ -1,6 +1,166 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><link rel="stylesheet" href="styles.css"><link rel="manifest" href="/manifest.json"><meta name="theme-color" content="#000000"><title>Admin Portal</title></head><body data-admin-page="home"><div class="logo-wrap"><img src="r4ar.png" class="logo" alt="Raving 4 A Reason"></div><main class="container admin-container">
-<div id="loginBox"><h1>Admin Login</h1><input id="adminUsername" value="admin" readonly><input type="password" id="adminPassword" placeholder="Password"><button onclick="loginAdmin()">LOGIN</button></div>
-<div id="adminPanel" style="display:none"><h1 id="adminGreeting">Welcome, Admin 👋</h1><div id="adminActionSummary" class="admin-attention"></div>
-<div class="admin-nav-grid">
-<a href="admin-members.html">👥<span>Members</span></a><a href="admin-mentors.html">🎧<span>Mentors</span></a><a href="admin-sessions.html">📅<span>Sessions</span></a><a href="admin-locations.html">📍<span>Locations</span></a><a href="admin-messages.html">💬<span>Messages</span></a><a href="admin-expenses.html">💷<span>Expenses</span></a><a href="admin-newsletter.html">📰<span>Newsletter</span></a><a href="admin-settings.html">⚙️<span>Settings</span></a><a href="admin-reports.html">📊<span>Reports</span></a></div>
-<div class="logout-section"><button class="logout-btn" onclick="logoutAdmin()">LOG OUT</button></div></div></main><footer>Raving 4 A Reason CIC | C.I.C REG 16251433</footer><script src="data.js"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="app.js"></script></body></html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Admin Panel</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="/images/bookapp-icon.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/bookapp-icon.png">
+  <meta name="theme-color" content="#000000">
+</head>
+<body>
+  <div class="logo-wrap">
+    <img src="r4ar.png" alt="Raving 4 A Reason" class="logo">
+  </div>
+
+  <div class="container admin-container">
+    <div id="loginBox">
+      <h1>Admin Login</h1>
+      <input type="text" id="adminUsername" placeholder="Username">
+      <input type="password" id="adminPassword" placeholder="Password">
+      <button onclick="loginAdmin()">LOGIN</button>
+    </div>
+
+    <div id="adminPanel" style="display:none;">
+      <h1>Admin Panel</h1>
+
+      <div class="admin-group dashboard-group">
+        <h2>DASHBOARD</h2>
+        <div id="dashboardSummary" class="dashboard-grid">
+          <p class="loading-text">Loading dashboard…</p>
+        </div>
+      </div>
+
+      <div class="admin-group">
+        <h2>SESSIONS</h2>
+
+        <button onclick="toggleSection('slotsSection')" class="secondary">CURRENT SESSIONS</button>
+        <div id="slotsSection" class="admin-section" style="display:none;">
+          <div id="adminSlots"></div>
+        </div>
+
+        <button onclick="toggleSection('bookedSection')" class="secondary">BOOKED SESSIONS</button>
+        <div id="bookedSection" class="admin-section" style="display:none;">
+          <div id="adminBookedSessions"></div>
+        </div>
+
+        <button onclick="toggleSection('addSessionSection')" class="secondary">ADD SESSION</button>
+        <div id="addSessionSection" class="admin-section form-panel" style="display:none;">
+          <label class="field-label" for="date">Date</label>
+          <input type="date" id="date">
+
+          <select id="type">
+            <option value="">Select Type</option>
+            <option value="DJ">DJ</option>
+            <option value="MC">MC</option>
+            <option value="Production">Production</option>
+          </select>
+
+          <input type="text" id="mentor" list="mentorList" placeholder="Select or type mentor">
+          <datalist id="mentorList"></datalist>
+
+          <input type="text" id="location" list="locationList" placeholder="Select or type location">
+          <datalist id="locationList"></datalist>
+
+          <input type="text" id="time" list="timeList" placeholder="Select or type time">
+          <datalist id="timeList">
+            <option value="12:00"><option value="13:00"><option value="14:00">
+            <option value="15:00"><option value="16:00"><option value="17:00">
+            <option value="18:00"><option value="19:00"><option value="20:00">
+          </datalist>
+
+          <button onclick="addSlot()">SAVE SESSION</button>
+        </div>
+      </div>
+
+      <div class="admin-group">
+        <h2>MENTORS</h2>
+
+        <button onclick="toggleSection('mentorsSection')" class="secondary">CURRENT MENTORS</button>
+        <div id="mentorsSection" class="admin-section" style="display:none;">
+          <div id="adminMentors"></div>
+        </div>
+
+        <button onclick="toggleSection('addMentorSection')" class="secondary">ADD MENTOR</button>
+        <div id="addMentorSection" class="admin-section form-panel" style="display:none;">
+          <input type="text" id="newMentorName" placeholder="Mentor Name">
+          <input type="email" id="newMentorEmail" placeholder="Mentor Email">
+
+          <select id="newMentorType">
+            <option value="">Select Type</option>
+            <option value="DJ">DJ</option>
+            <option value="MC">MC</option>
+            <option value="Production">Production</option>
+          </select>
+
+          <input type="text" id="newMentorLocation" list="locationList" placeholder="Select or type location">
+          <button onclick="addMentor()">SAVE MENTOR</button>
+        </div>
+      </div>
+
+      <div class="admin-group">
+        <h2>LOCATIONS</h2>
+
+        <button onclick="toggleSection('locationsSection')" class="secondary">CURRENT LOCATIONS</button>
+        <div id="locationsSection" class="admin-section" style="display:none;">
+          <div id="adminLocations"></div>
+        </div>
+
+        <button onclick="toggleSection('addLocationSection')" class="secondary">ADD LOCATION</button>
+        <div id="addLocationSection" class="admin-section form-panel" style="display:none;">
+          <input type="text" id="newLocationName" placeholder="Location Name">
+          <button onclick="addLocation()">SAVE LOCATION</button>
+        </div>
+      </div>
+
+      <div class="admin-group">
+        <h2>MEMBERS</h2>
+
+        <button onclick="toggleSection('membersSection')" class="secondary">CURRENT MEMBERS</button>
+        <div id="membersSection" class="admin-section" style="display:none;">
+          <div class="member-tools">
+            <input type="search" id="memberSearch" placeholder="Search member or DJ / MC name">
+            <select id="memberTypeFilter">
+              <option value="">All Types</option>
+              <option value="Lessons Paid">Lessons Paid</option>
+              <option value="Lessons Funded">Lessons Funded</option>
+              <option value="Membership">Membership</option>
+              <option value="Part Funded">Part Funded</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+          <div id="adminMembers"></div>
+        </div>
+
+        <button onclick="toggleSection('addMemberSection')" class="secondary">ADD MEMBER</button>
+        <div id="addMemberSection" class="admin-section form-panel" style="display:none;">
+          <input type="text" id="memberName" placeholder="Member Name">
+          <input type="text" id="memberDjMcName" placeholder="DJ / MC Name (optional)">
+          <select id="memberType">
+            <option value="">Select Type</option>
+            <option value="Lessons Paid">Lessons Paid</option>
+            <option value="Lessons Funded">Lessons Funded</option>
+            <option value="Membership">Membership</option>
+            <option value="Part Funded">Part Funded</option>
+            <option value="Other">Other</option>
+          </select>
+          <button onclick="addMember()">SAVE MEMBER</button>
+        </div>
+      </div>
+
+      <div class="logout-section">
+        <div class="logout-divider"></div>
+        <button onclick="logoutAdmin()" class="logout-btn">LOG OUT</button>
+      </div>
+    </div>
+  </div>
+
+  <footer>Raving 4 A Reason CIC | C.I.C REG 16251433</footer>
+
+  <script src="data.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="app.js"></script>
+</body>
+</html>

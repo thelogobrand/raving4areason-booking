@@ -33,9 +33,7 @@ create table if not exists public.expenses (
   category text,
   reason text not null,
   receipt_url text,
-  status text not null default 'Submitted',
-  mentor_display_name text,
-  paid_at timestamptz,
+  status text not null default 'Pending',
   created_at timestamptz not null default now()
 );
 
@@ -98,19 +96,3 @@ create policy "mentor profile image updates"
 on storage.objects for update
 using (bucket_id = 'mentor-profile-images')
 with check (bucket_id = 'mentor-profile-images');
-
-
--- Final expense workflow additions
-alter table public.expenses add column if not exists mentor_display_name text;
-alter table public.expenses add column if not exists paid_at timestamptz;
-alter table public.expenses alter column status set default 'Submitted';
-
-update public.expenses
-set status = 'Submitted'
-where status is null or status = 'Pending';
-
-drop policy if exists "expenses updateable" on public.expenses;
-create policy "expenses updateable"
-on public.expenses for update
-using (true)
-with check (true);
