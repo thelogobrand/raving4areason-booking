@@ -94,7 +94,11 @@
         <input type="date" id="expenseDate">
 
         <div id="mileageFields">
-          <input type="number" id="expenseMiles" min="0" step="0.1" placeholder="Miles travelled">
+          <input type="number" id="expenseMiles" min="0" step="0.1" placeholder="Miles travelled" oninput="updateMileageAmount()">
+          <div class="mileage-summary">
+            <p>Rate: <strong>£0.45 per mile</strong></p>
+            <p>Claim amount: <strong id="mileageClaimAmount">£0.00</strong></p>
+          </div>
         </div>
 
         <div id="receiptFields" style="display:none;">
@@ -130,27 +134,27 @@
         </div>
 
         <label class="field-label" for="profileName">Name</label>
-        <input type="text" id="profileName" placeholder="Name">
+        <input type="text" id="profileName" placeholder="Name" readonly>
 
         <label class="field-label" for="profileArtistName">Artist Name</label>
-        <input type="text" id="profileArtistName" placeholder="Artist name (optional)">
+        <input type="text" id="profileArtistName" placeholder="Artist name (optional)" readonly>
 
         <label class="field-label" for="profileEmail">Email</label>
         <input type="email" id="profileEmail" placeholder="Email address">
 
         <label class="field-label" for="profileDefaultType">Default Type</label>
-        <select id="profileDefaultType">
+        <select id="profileDefaultType" disabled>
           <option value="DJ">DJ</option>
           <option value="MC">MC</option>
           <option value="Production">Production</option>
         </select>
 
         <label class="field-label" for="profileDefaultLocation">Default Location</label>
-        <select id="profileDefaultLocation">
+        <select id="profileDefaultLocation" disabled>
           <option value="">Select location</option>
         </select>
 
-        <button type="button" onclick="saveMentorProfile()">SAVE PROFILE</button>
+        <button type="button" onclick="saveMentorProfile()">SAVE EMAIL</button>
 
         <div class="profile-divider"></div>
         <h2>Change Password</h2>
