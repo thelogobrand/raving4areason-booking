@@ -226,6 +226,7 @@ async function loginMentor() {
   localStorage.setItem("mentorLoggedIn", "true");
   localStorage.setItem("mentorName", mentor.name);
   localStorage.setItem("mentorId", mentor.id || "");
+  sessionStorage.setItem("mentorAuthProof", suppliedHash);
 
   showMentorPanel();
 }
@@ -234,6 +235,7 @@ function logoutMentor() {
   localStorage.removeItem("mentorLoggedIn");
   localStorage.removeItem("mentorName");
   localStorage.removeItem("mentorId");
+  sessionStorage.removeItem("mentorAuthProof");
   showMentorLoginBox();
 }
 
@@ -1384,27 +1386,15 @@ async function loadMentorProfileAndDefaults() {
     .map(part => part[0].toUpperCase())
     .join("");
 
-  if (mentorProfileCache.profile_image_url) {
-    if (avatarImage) {
-      const imageUrl = `${mentorProfileCache.profile_image_url}${mentorProfileCache.profile_image_url.includes("?") ? "&" : "?"}v=${Date.now()}`;
-      avatarImage.onload = () => {
-        avatarImage.style.display = "block";
-        if (avatarInitials) avatarInitials.style.display = "none";
-      };
-      avatarImage.onerror = () => {
-        avatarImage.style.display = "none";
-        if (avatarInitials) {
-          avatarInitials.textContent = initials || "M";
-          avatarInitials.style.display = "flex";
-        }
-      };
-      avatarImage.src = imageUrl;
-    }
-  } else {
-    if (avatarImage) avatarImage.style.display = "none";
-    if (avatarInitials) {
-      avatarInitials.textContent = initials || "M";
-      avatarInitials.style.display = "flex";
+  setMentorAvatar(mentorProfileCache.profile_image_url || "", displayName);
+  const profilePreview = document.getElementById("mentorProfilePreview");
+  if (profilePreview) {
+    if (mentorProfileCache.profile_image_url) {
+      profilePreview.src = `${mentorProfileCache.profile_image_url}${mentorProfileCache.profile_image_url.includes("?") ? "&" : "?"}v=${Date.now()}`;
+      profilePreview.style.display = "block";
+    } else {
+      profilePreview.removeAttribute("src");
+      profilePreview.style.display = "none";
     }
   }
   if (avatarButton) avatarButton.title = `Open ${displayName}'s profile`;
@@ -1429,175 +1419,235 @@ function openMentorProfile() {
   }
 }
 
+async function callMentorProfileFunction(payload) {
+  const response = await fetch("/.netlify/functions/mentor-profile-update", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      mentor_id: mentorProfileCache?.id || localStorage.getItem("mentorId") || "",
+      mentor_name: mentorProfileCache?.name || getLoggedInMentorName() || "",
+      auth_proof: sessionStorage.getItem("mentorAuthProof") || "",
+      ...payload
+    })
+  });
+
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok || !result.success) {
+    throw new Error(result.error || "Profile update failed");
+  }
+  return result;
+}
+
+function setMentorAvatar(url, displayName) {
+  const avatarImage = document.getElementById("mentorAvatarImage");
+  const avatarInitials = document.getElementById("mentorAvatarInitials");
+  const initials = (displayName || "M")
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(part => part[0].toUpperCase())
+    .join("");
+
+  if (url) {
+    const freshUrl = `${url}${url.includes("?") ? "&" : "?"}v=${Date.now()}`;
+    if (avatarImage) {
+      avatarImage.onload = () => {
+        avatarImage.style.display = "block";
+        if (avatarInitials) avatarInitials.style.display = "none";
+      };
+      avatarImage.onerror = () => {
+        avatarImage.style.display = "none";
+        if (avatarInitials) {
+          avatarInitials.textContent = initials || "M";
+          avatarInitials.style.display = "flex";
+        }
+      };
+      avatarImage.src = freshUrl;
+    }
+  } else {
+    if (avatarImage) {
+      avatarImage.removeAttribute("src");
+      avatarImage.style.display = "none";
+    }
+    if (avatarInitials) {
+      avatarInitials.textContent = initials || "M";
+      avatarInitials.style.display = "flex";
+    }
+  }
+}
+
+function openProfilePhotoMenu() {
+  const sheet = document.getElementById("profilePhotoSheet");
+  if (sheet) sheet.classList.add("open");
+}
+
+function closeProfilePhotoMenu(event) {
+  const sheet = document.getElementById("profilePhotoSheet");
+  if (!sheet) return;
+  if (!event || event.target === sheet) sheet.classList.remove("open");
+}
+
+function chooseMentorPhoto(source) {
+  const input = document.getElementById(
+    source === "camera" ? "mentorCameraInput" : "mentorGalleryInput"
+  );
+  closeProfilePhotoMenu();
+  input?.click();
+}
+
+async function handleMentorPhotoSelected(input) {
+  const file = input?.files?.[0];
+  if (!file) return;
+
+  if (!file.type.startsWith("image/")) {
+    alert("Please choose an image file");
+    input.value = "";
+    return;
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    alert("Profile image must be under 5MB");
+    input.value = "";
+    return;
+  }
+
+  try {
+    const mentorId = mentorProfileCache?.id || localStorage.getItem("mentorId");
+    if (!mentorId) throw new Error("Mentor profile not loaded");
+
+    const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
+    const safeExt = ["jpg","jpeg","png","webp"].includes(ext) ? ext : "jpg";
+    const path = `${mentorId}/profile-${Date.now()}.${safeExt}`;
+
+    const { error: uploadError } = await db.storage
+      .from("mentor-profile-images")
+      .upload(path, file, {
+        upsert: true,
+        contentType: file.type,
+        cacheControl: "0"
+      });
+
+    if (uploadError) throw uploadError;
+
+    const { data } = db.storage
+      .from("mentor-profile-images")
+      .getPublicUrl(path);
+    const publicUrl = data?.publicUrl || "";
+    if (!publicUrl) throw new Error("Could not create image URL");
+
+    await callMentorProfileFunction({
+      action: "set_photo",
+      profile_image_url: publicUrl
+    });
+
+    mentorProfileCache.profile_image_url = publicUrl;
+    const displayName =
+      mentorProfileCache.artist_name?.trim() || mentorProfileCache.name || "Mentor";
+    setMentorAvatar(publicUrl, displayName);
+    const preview = document.getElementById("mentorProfilePreview");
+    if (preview) {
+      preview.src = `${publicUrl}?v=${Date.now()}`;
+      preview.style.display = "block";
+    }
+    alert("Profile photo updated successfully");
+  } catch (error) {
+    console.error(error);
+    alert(error.message || "Error updating profile photo");
+  } finally {
+    input.value = "";
+  }
+}
+
+async function removeMentorProfilePhoto() {
+  closeProfilePhotoMenu();
+  if (!mentorProfileCache?.profile_image_url) {
+    alert("No profile photo to remove");
+    return;
+  }
+  if (!confirm("Remove your profile photo?")) return;
+
+  try {
+    await callMentorProfileFunction({ action: "remove_photo" });
+    mentorProfileCache.profile_image_url = null;
+    const displayName =
+      mentorProfileCache.artist_name?.trim() || mentorProfileCache.name || "Mentor";
+    setMentorAvatar("", displayName);
+    const preview = document.getElementById("mentorProfilePreview");
+    if (preview) {
+      preview.removeAttribute("src");
+      preview.style.display = "none";
+    }
+    alert("Profile photo removed");
+  } catch (error) {
+    console.error(error);
+    alert(error.message || "Error removing profile photo");
+  }
+}
+
 async function saveMentorProfile() {
   if (!mentorProfileCache?.id) {
     alert("Mentor profile not loaded");
     return;
   }
 
-  const oldName = mentorProfileCache.name;
-  const name = document.getElementById("profileName")?.value.trim() || "";
-  const artistName = document.getElementById("profileArtistName")?.value.trim() || "";
   const email = document.getElementById("profileEmail")?.value.trim() || "";
-  const type = document.getElementById("profileDefaultType")?.value || "";
-  const location = document.getElementById("profileDefaultLocation")?.value || "";
-
-  if (!name || !type || !location) {
-    alert("Please enter your name, default type and default location");
-    return;
-  }
-
-  const { error } = await db
-    .from("mentors")
-    .update({
-      name,
-      artist_name: artistName || null,
-      email: email || null,
-      type,
-      location
-    })
-    .eq("id", mentorProfileCache.id);
-
-  if (error) {
-    console.error(error);
-    alert("Error saving profile");
-    return;
-  }
-
-  if (oldName !== name) {
-    const relatedUpdates = [
-      db.from("sessions").update({ mentor: name }).eq("mentor", oldName),
-      db.from("bookings").update({ mentor: name }).eq("mentor", oldName),
-      db.from("messages").update({ mentor: name }).eq("mentor", oldName),
-      db.from("expenses").update({ mentor: name }).eq("mentor", oldName)
-    ];
-    const results = await Promise.allSettled(relatedUpdates);
-    results.forEach(result => {
-      if (result.status === "rejected") console.error(result.reason);
-    });
-    localStorage.setItem("mentorName", name);
-  }
-
-  alert("Profile updated");
-  await initialiseMentorPortal();
-}
-
-async function uploadMentorProfileImage() {
-  if (!mentorProfileCache?.id) {
-    alert("Mentor profile not loaded");
-    return;
-  }
-
-  const input = document.getElementById("mentorProfileImageInput");
-  const file = input?.files?.[0];
-  if (!file) {
-    alert("Please choose an image");
-    return;
-  }
-  if (!file.type.startsWith("image/")) {
-    alert("Please choose an image file");
-    return;
-  }
-  if (file.size > 5 * 1024 * 1024) {
-    alert("Profile image must be under 5MB");
-    return;
-  }
-
-  const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
-  const safeExt = ["jpg","jpeg","png","webp","gif"].includes(ext) ? ext : "jpg";
-  const path = `${mentorProfileCache.id}/profile-${Date.now()}.${safeExt}`;
-
-  const { error: uploadError } = await db.storage
-    .from("mentor-profile-images")
-    .upload(path, file, { upsert: true, contentType: file.type });
-
-  if (uploadError) {
-    console.error(uploadError);
-    alert("Error uploading profile image");
-    return;
-  }
-
-  const { data } = db.storage.from("mentor-profile-images").getPublicUrl(path);
-  const publicUrl = data?.publicUrl || "";
-  const { error: updateError } = await db
-    .from("mentors")
-    .update({ profile_image_url: publicUrl })
-    .eq("id", mentorProfileCache.id);
-
-  if (updateError) {
-    console.error(updateError);
-    alert("Image uploaded but profile could not be updated");
-    return;
-  }
-
-  mentorProfileCache.profile_image_url = publicUrl;
-
-  const avatarImage = document.getElementById("mentorAvatarImage");
-  const avatarInitials = document.getElementById("mentorAvatarInitials");
-  if (avatarImage) {
-    const previewUrl = URL.createObjectURL(file);
-    avatarImage.onload = () => URL.revokeObjectURL(previewUrl);
-    avatarImage.src = previewUrl;
-    avatarImage.style.display = "block";
-  }
-  if (avatarInitials) avatarInitials.style.display = "none";
-
-  if (input) input.value = "";
-  alert("Profile image updated");
-  await loadMentorProfileAndDefaults();
-}
-
-async function changeMentorPassword() {
-  if (!mentorProfileCache?.id) {
-    alert("Mentor profile not loaded");
-    return;
-  }
-
   const currentPassword = document.getElementById("mentorCurrentPassword")?.value || "";
   const newPassword = document.getElementById("mentorNewPassword")?.value || "";
   const confirmPassword = document.getElementById("mentorConfirmPassword")?.value || "";
 
-  if (!currentPassword || !newPassword || !confirmPassword) {
-    alert("Please complete all password fields");
-    return;
-  }
-  if (newPassword.length < 6) {
-    alert("New password must be at least 6 characters");
-    return;
-  }
-  if (newPassword !== confirmPassword) {
-    alert("New passwords do not match");
-    return;
-  }
-
-  const currentHash = await hashPassword(currentPassword);
-  const currentValid = mentorProfileCache.password_hash
-    ? currentHash === mentorProfileCache.password_hash
-    : currentPassword === MENTOR_PASSWORD;
-
-  if (!currentValid) {
-    alert("Current password is incorrect");
-    return;
+  if (newPassword || confirmPassword) {
+    if (!currentPassword) {
+      alert("Please enter your current password");
+      return;
+    }
+    if (newPassword.length < 6) {
+      alert("New password must be at least 6 characters");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      alert("New passwords do not match");
+      return;
+    }
   }
 
-  const newHash = await hashPassword(newPassword);
-  const { error } = await db
-    .from("mentors")
-    .update({ password_hash: newHash })
-    .eq("id", mentorProfileCache.id);
+  try {
+    const payload = { action: "save_profile", email: email || null };
 
-  if (error) {
+    if (newPassword) {
+      const currentProof = await hashPassword(currentPassword);
+      if (currentProof !== sessionStorage.getItem("mentorAuthProof")) {
+        alert("Current password is incorrect");
+        return;
+      }
+      payload.new_password_hash = await hashPassword(newPassword);
+    }
+
+    await callMentorProfileFunction(payload);
+
+    mentorProfileCache.email = email || null;
+    if (payload.new_password_hash) {
+      sessionStorage.setItem("mentorAuthProof", payload.new_password_hash);
+      mentorProfileCache.password_hash = payload.new_password_hash;
+    }
+
+    ["mentorCurrentPassword","mentorNewPassword","mentorConfirmPassword"].forEach(id => {
+      const input = document.getElementById(id);
+      if (input) input.value = "";
+    });
+
+    alert("Profile updated successfully");
+  } catch (error) {
     console.error(error);
-    alert("Error changing password");
-    return;
+    alert(error.message || "Error saving profile");
   }
+}
 
-  ["mentorCurrentPassword","mentorNewPassword","mentorConfirmPassword"].forEach(id => {
-    const input = document.getElementById(id);
-    if (input) input.value = "";
-  });
-  alert("Password changed successfully");
-  await loadMentorProfileAndDefaults();
+async function uploadMentorProfileImage() {
+  const input = document.getElementById("mentorGalleryInput");
+  if (input) input.click();
+}
+
+async function changeMentorPassword() {
+  return saveMentorProfile();
 }
 
 async function addMentorAvailability() {

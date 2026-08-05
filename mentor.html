@@ -94,11 +94,7 @@
         <input type="date" id="expenseDate">
 
         <div id="mileageFields">
-          <input type="number" id="expenseMiles" min="0" step="0.1" placeholder="Miles travelled" oninput="updateMileageAmount()">
-          <div class="mileage-summary">
-            <p>Rate: <strong>£0.45 per mile</strong></p>
-            <p>Claim amount: <strong id="mileageClaimAmount">£0.00</strong></p>
-          </div>
+          <input type="number" id="expenseMiles" min="0" step="0.1" placeholder="Miles travelled">
         </div>
 
         <div id="receiptFields" style="display:none;">
@@ -128,16 +124,20 @@
         </div>
 
         <div class="profile-photo-editor">
-          <label class="field-label" for="mentorProfileImageInput">Profile image</label>
-          <input type="file" id="mentorProfileImageInput" accept="image/*">
-          <button type="button" class="secondary compact-btn" onclick="uploadMentorProfileImage()">UPLOAD / CHANGE IMAGE</button>
+          <button type="button" class="profile-photo-large" onclick="openProfilePhotoMenu()" aria-label="Change profile photo">
+            <img id="mentorProfilePreview" alt="">
+            <span class="profile-camera-badge">📷</span>
+          </button>
+          <p class="small-muted">Tap the photo to change it</p>
+          <input type="file" id="mentorCameraInput" accept="image/*" capture="user" hidden onchange="handleMentorPhotoSelected(this)">
+          <input type="file" id="mentorGalleryInput" accept="image/*" hidden onchange="handleMentorPhotoSelected(this)">
         </div>
 
         <label class="field-label" for="profileName">Name</label>
         <input type="text" id="profileName" placeholder="Name" readonly>
 
         <label class="field-label" for="profileArtistName">Artist Name</label>
-        <input type="text" id="profileArtistName" placeholder="Artist name (optional)" readonly>
+        <input type="text" id="profileArtistName" placeholder="Artist name" readonly>
 
         <label class="field-label" for="profileEmail">Email</label>
         <input type="email" id="profileEmail" placeholder="Email address">
@@ -154,15 +154,23 @@
           <option value="">Select location</option>
         </select>
 
-        <button type="button" onclick="saveMentorProfile()">SAVE EMAIL</button>
-
         <div class="profile-divider"></div>
         <h2>Change Password</h2>
         <input type="password" id="mentorCurrentPassword" placeholder="Current password" autocomplete="current-password">
         <input type="password" id="mentorNewPassword" placeholder="New password" autocomplete="new-password">
         <input type="password" id="mentorConfirmPassword" placeholder="Confirm new password" autocomplete="new-password">
-        <button type="button" class="secondary" onclick="changeMentorPassword()">CHANGE PASSWORD</button>
+
+        <button type="button" onclick="saveMentorProfile()">SAVE</button>
       </section>
+
+      <div id="profilePhotoSheet" class="profile-photo-sheet" onclick="closeProfilePhotoMenu(event)">
+        <div class="profile-photo-sheet-panel">
+          <h2>Profile Photo</h2>
+          <button type="button" class="secondary" onclick="chooseMentorPhoto('camera')">📷 TAKE PHOTO</button>
+          <button type="button" class="secondary" onclick="chooseMentorPhoto('gallery')">🖼️ CHOOSE FROM GALLERY</button>
+          <button type="button" class="danger-btn" onclick="removeMentorProfilePhoto()">🗑️ REMOVE PHOTO</button>
+        </div>
+      </div>
 
       <div class="logout-section">
         <div class="logout-divider"></div>
