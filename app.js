@@ -4,11 +4,11 @@ const SUPABASE_KEY = "sb_publishable_KJx1attn5Dbo_Zex4IBc6A_GZR3xytW";
 const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const ADMIN_USERNAME = "admin";
-const ADMIN_PASSWORD = "R4AR";
+let ADMIN_PASSWORD = localStorage.getItem("r4arAdminPassword") || "R4AR";
 const MENTOR_PASSWORD = "Mentor";
 
 const PARENT_USERNAME = "R4ARparent";
-const PARENT_PASSWORD = "R4AR";
+let PARENT_PASSWORD = localStorage.getItem("r4arParentPassword") || "R4AR";
 const DONATION_URL = "https://www.gofundme.com/f/buy-more-equipment-for-young-peoples-workshops-worksh?attribution_id=sl:e5544b21-38bf-4f5d-9b45-75d32cf8ef34&lang=en_GB&utm_campaign=fp_sharesheet&utm_medium=customer&utm_source=qr_code";
 
 async function hashPassword(value) {
@@ -142,7 +142,7 @@ function loginAdmin() {
 
 function logoutAdmin() {
   localStorage.removeItem("adminLoggedIn");
-  showLoginBox();
+  window.location.href = "admin.html";
 }
 
 function showAdminPanel() {
@@ -973,77 +973,64 @@ async function loadAdminDropdowns() {
 
 async function addMentor() {
   const name = document.getElementById("newMentorName")?.value.trim() || "";
+  const artistName = document.getElementById("newMentorArtistName")?.value.trim() || "";
+  const email = document.getElementById("newMentorEmail")?.value.trim() || "";
+  const phone = document.getElementById("newMentorPhone")?.value.trim() || "";
   const type = document.getElementById("newMentorType")?.value || "";
   const location = document.getElementById("newMentorLocation")?.value.trim() || "";
-  const email = document.getElementById("newMentorEmail")?.value.trim() || "";
+  const adminNotes = document.getElementById("newMentorAdminNotes")?.value.trim() || "";
+  const dbsChecked = Boolean(document.getElementById("newMentorDbsChecked")?.checked);
 
   if (!name || !email || !type || !location) {
-  alert("Please fill all mentor fields");
-  return;
-  }
-
-  const { error } = await db
-    .from("mentors")
-    .insert([{ name, email, type, location }]);
-
-  if (error) {
-    console.error(error);
-    alert("Error adding mentor");
+    alert("Please complete name, email, type and location");
     return;
   }
 
-  const { data: existingLocation } = await db
-    .from("locations")
-    .select("*")
-    .eq("name", location)
-    .limit(1);
+  const { error } = await db.from("mentors").insert([{
+    name, artist_name: artistName || null, email, phone: phone || null,
+    type, location, admin_notes: adminNotes || null, dbs_checked: dbsChecked
+  }]);
+  if (error) { console.error(error); alert("Error adding mentor"); return; }
 
-  if (!existingLocation || existingLocation.length === 0) {
-    await db.from("locations").insert([{ name: location }]);
-  }
+  const { data: existingLocation } = await db.from("locations").select("id").eq("name", location).limit(1);
+  if (!existingLocation?.length) await db.from("locations").insert([{ name: location }]);
 
-  renderAdminMentors();
-  renderAdminLocations();
-  loadAdminDropdowns();
-  loadDashboard();
-  loadSearchFilters();
-
-  document.getElementById("newMentorName").value = "";
-  document.getElementById("newMentorType").value = "";
-  document.getElementById("newMentorLocation").value = "";
-  document.getElementById("newMentorEmail").value = "";
+  ["newMentorName","newMentorArtistName","newMentorEmail","newMentorPhone","newMentorLocation","newMentorAdminNotes"].forEach(id => { const el=document.getElementById(id); if(el) el.value=""; });
+  const typeEl=document.getElementById("newMentorType"); if(typeEl) typeEl.value="";
+  const dbsEl=document.getElementById("newMentorDbsChecked"); if(dbsEl) dbsEl.checked=false;
+  alert("Mentor created. Temporary password: Mentor");
+  await Promise.all([renderAdminMentors(), loadAdminDropdowns(), loadDashboard()]);
 }
 
 async function renderAdminMentors() {
   const container = document.getElementById("adminMentors");
   if (!container) return;
+  const { data, error } = await db.from("mentors").select("*").order("name", { ascending: true });
+  if (error) { console.error(error); container.innerHTML="<p>Error loading mentors.</p>"; return; }
+  const q=(document.getElementById("mentorAdminSearch")?.value||"").toLowerCase();
+  const rows=(data||[]).filter(m => [m.name,m.artist_name,m.email,m.type,m.location].join(" ").toLowerCase().includes(q));
+  container.innerHTML=rows.map(m=>`<div class="slot-card mentor-admin-card"><p><strong>${escapeHtml(m.artist_name||m.name)}</strong></p><p>${escapeHtml(m.name)}</p><p>${escapeHtml(m.email||"")}${m.phone?` · ${escapeHtml(m.phone)}`:""}</p><p>${escapeHtml(m.type||"")} · ${escapeHtml(m.location||"")}</p>${m.dbs_checked?'<p class="dbs-badge">DBS Checked ✓</p>':''}${m.admin_notes?`<p class="muted">${escapeHtml(m.admin_notes)}</p>`:""}<div class="inline-actions"><button class="secondary" onclick="editMentor('${m.id}')">EDIT</button><button onclick="resetMentorPassword('${m.id}','${escapeHtml((m.artist_name||m.name).replace(/'/g,"&#39;"))}')">RESET PASSWORD</button><button class="danger-btn" onclick="removeMentor('${m.id}')">DELETE</button></div></div>`).join("")||"<p>No mentors added yet.</p>";
+}
 
-  const { data, error } = await db
-    .from("mentors")
-    .select("*")
-    .order("type", { ascending: true })
-    .order("name", { ascending: true });
+async function editMentor(id) {
+  const { data, error } = await db.from("mentors").select("*").eq("id", id).single();
+  if (error || !data) { alert("Could not load mentor"); return; }
+  const name=prompt("Name", data.name||""); if(name===null) return;
+  const artist_name=prompt("Artist Name (optional)", data.artist_name||""); if(artist_name===null) return;
+  const email=prompt("Email", data.email||""); if(email===null) return;
+  const phone=prompt("Phone (optional)", data.phone||""); if(phone===null) return;
+  const type=prompt("Default Type: DJ, MC or Production", data.type||"DJ"); if(type===null) return;
+  const location=prompt("Default Location", data.location||""); if(location===null) return;
+  const admin_notes=prompt("Admin Notes (optional)", data.admin_notes||""); if(admin_notes===null) return;
+  const dbs_checked=confirm("Is DBS checked? Press OK for Yes, Cancel for No.");
+  const { error:updateError }=await db.from("mentors").update({name:name.trim(),artist_name:artist_name.trim()||null,email:email.trim(),phone:phone.trim()||null,type:type.trim(),location:location.trim(),admin_notes:admin_notes.trim()||null,dbs_checked}).eq("id",id);
+  if(updateError){console.error(updateError);alert("Error updating mentor");return;} await renderAdminMentors();
+}
 
-  if (error) {
-    console.error(error);
-    container.innerHTML = "<p>Error loading mentors.</p>";
-    return;
-  }
-
-  let html = "";
-
-  (data || []).forEach(mentor => {
-    html += `
-      <div class="slot-card">
-        <p><strong>${mentor.name}</strong></p>
-        <p>${mentor.type}</p>
-        <p>${mentor.location}</p>
-        <button onclick="removeMentor('${mentor.id}')">REMOVE MENTOR</button>
-      </div>
-    `;
-  });
-
-  container.innerHTML = html || "<p>No mentors added yet.</p>";
+async function resetMentorPassword(id, displayName) {
+  if(!confirm(`Reset ${displayName}'s password to Mentor?`)) return;
+  const { error }=await db.from("mentors").update({password_hash:null}).eq("id",id);
+  if(error){console.error(error);alert("Error resetting password");return;} alert("Password reset to Mentor");
 }
 
 async function removeMentor(id) {
@@ -1345,7 +1332,7 @@ async function loadMentorProfileAndDefaults() {
 
   const displayName = mentorProfileCache.artist_name?.trim() || mentorProfileCache.name;
   const mentorWelcome = document.getElementById("mentorWelcome");
-  if (mentorWelcome) mentorWelcome.textContent = `Welcome, ${displayName} 👋`;
+  if (mentorWelcome) mentorWelcome.textContent = `Welcome, ${displayName}`;
 
   const typeSelect = document.getElementById("mentorTypeSelect");
   if (typeSelect) {
@@ -1386,7 +1373,7 @@ async function loadMentorProfileAndDefaults() {
 
   if (mentorProfileCache.profile_image_url) {
     if (avatarImage) {
-      avatarImage.src = mentorProfileCache.profile_image_url;
+      avatarImage.src = `${mentorProfileCache.profile_image_url}${mentorProfileCache.profile_image_url.includes("?") ? "&" : "?"}v=${Date.now()}`;
       avatarImage.style.display = "block";
     }
     if (avatarInitials) avatarInitials.style.display = "none";
@@ -1520,6 +1507,14 @@ async function uploadMentorProfileImage() {
     return;
   }
 
+  mentorProfileCache.profile_image_url = publicUrl;
+  const avatarImage = document.getElementById("mentorAvatarImage");
+  const avatarInitials = document.getElementById("mentorAvatarInitials");
+  if (avatarImage) {
+    avatarImage.src = `${publicUrl}${publicUrl.includes("?") ? "&" : "?"}v=${Date.now()}`;
+    avatarImage.style.display = "block";
+  }
+  if (avatarInitials) avatarInitials.style.display = "none";
   if (input) input.value = "";
   alert("Profile image updated");
   await loadMentorProfileAndDefaults();
@@ -1621,7 +1616,7 @@ async function addMentorAvailability() {
     return;
   }
 
-  alert(`✅ ${newTimes.length} session${newTimes.length === 1 ? "" : "s"} added:\n${newTimes.join(", ")}`);
+  alert(`✅ ${newTimes.length} session${newTimes.length === 1 ? "" : "s"} added successfully\n\n${formatDisplayDate(date)}\n\n${newTimes.join("\n")}`);
   clearSelectedMentorTimes();
 
   await Promise.all([
@@ -1840,28 +1835,31 @@ async function renderMentorNewsletter() {
 
 function updateExpenseFields() {
   const type = document.getElementById("expenseType")?.value || "mileage";
-  const mileage = document.getElementById("mileageFields");
-  const receipt = document.getElementById("receiptFields");
-  if (mileage) mileage.style.display = type === "mileage" ? "block" : "none";
-  if (receipt) receipt.style.display = type === "receipt" ? "block" : "none";
+  const mileageFields = document.getElementById("mileageFields");
+  const receiptFields = document.getElementById("receiptFields");
+  if (mileageFields) mileageFields.style.display = type === "mileage" ? "block" : "none";
+  if (receiptFields) receiptFields.style.display = type === "receipt" ? "block" : "none";
 }
 
 async function submitMentorExpense() {
   const mentor = getLoggedInMentorName();
+  const displayName = mentorProfileCache?.artist_name?.trim() || mentor;
   const expenseType = document.getElementById("expenseType")?.value || "";
   const expenseDate = document.getElementById("expenseDate")?.value || "";
   const reason = document.getElementById("expenseReason")?.value.trim() || "";
   const miles = Number(document.getElementById("expenseMiles")?.value || 0);
-  const amount = Number(document.getElementById("expenseAmount")?.value || 0);
+  const mileageAmount = Number(document.getElementById("expenseMileageAmount")?.value || 0);
+  const receiptAmount = Number(document.getElementById("expenseAmount")?.value || 0);
   const category = document.getElementById("expenseCategory")?.value || null;
   const receiptFile = document.getElementById("expenseReceipt")?.files?.[0] || null;
+  const amount = expenseType === "mileage" ? mileageAmount : receiptAmount;
 
   if (!mentor || !expenseDate || !reason) {
     alert("Please enter the date and reason");
     return;
   }
-  if (expenseType === "mileage" && miles <= 0) {
-    alert("Please enter the mileage");
+  if (expenseType === "mileage" && (miles <= 0 || amount <= 0)) {
+    alert("Please enter the miles and claim amount");
     return;
   }
   if (expenseType === "receipt" && amount <= 0) {
@@ -1871,28 +1869,29 @@ async function submitMentorExpense() {
 
   let receiptUrl = null;
   if (receiptFile) {
-    const safeName = `${Date.now()}-${receiptFile.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
-    const path = `${mentor.replace(/[^a-zA-Z0-9_-]/g, "_")}/${safeName}`;
+    const safeName = receiptFile.name.replace(/[^a-zA-Z0-9._-]/g, "-");
+    const path = `${mentor}/${Date.now()}-${safeName}`;
     const upload = await db.storage.from("expense-receipts").upload(path, receiptFile);
     if (upload.error) {
       console.error(upload.error);
-      alert("Could not upload receipt");
+      alert("Error uploading receipt");
       return;
     }
     receiptUrl = db.storage.from("expense-receipts").getPublicUrl(path).data.publicUrl;
   }
 
-  const { error } = await db.from("expenses").insert([{
+  const { data: inserted, error } = await db.from("expenses").insert([{
     mentor,
+    mentor_display_name: displayName,
     expense_type: expenseType,
     expense_date: expenseDate,
     miles: expenseType === "mileage" ? miles : null,
-    amount: expenseType === "receipt" ? amount : null,
+    amount,
     category: expenseType === "receipt" ? category : "Mileage",
     reason,
     receipt_url: receiptUrl,
-    status: "Pending"
-  }]);
+    status: "Submitted"
+  }]).select().single();
 
   if (error) {
     console.error(error);
@@ -1900,12 +1899,33 @@ async function submitMentorExpense() {
     return;
   }
 
-  document.getElementById("expenseMiles").value = "";
-  document.getElementById("expenseAmount").value = "";
-  document.getElementById("expenseReason").value = "";
-  document.getElementById("expenseReceipt").value = "";
-  await renderMentorExpenses();
-  alert("Expense submitted");
+  let emailSent = true;
+  try {
+    const response = await fetch("/.netlify/functions/send-expense-email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ expense: inserted })
+    });
+    emailSent = response.ok;
+    if (!response.ok) console.error("Expense email failed:", await response.text());
+  } catch (emailError) {
+    emailSent = false;
+    console.error("Expense email failed:", emailError);
+  }
+
+  const ids = ["expenseMiles", "expenseMileageAmount", "expenseAmount", "expenseReason", "expenseReceipt"];
+  ids.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = "";
+  });
+  const dateInput = document.getElementById("expenseDate");
+  if (dateInput) dateInput.value = getTodayDate();
+
+  alert(emailSent
+    ? "Expense submitted and emailed to Raving 4 A Reason"
+    : "Expense saved, but the notification email could not be sent");
+
+  await Promise.all([renderMentorExpenses(), renderAdminExpenses()]);
 }
 
 async function renderMentorExpenses() {
@@ -1915,7 +1935,7 @@ async function renderMentorExpenses() {
 
   const { data, error } = await db
     .from("expenses")
-    .select("*")
+    .select("id,mentor_display_name,amount,status,expense_date,paid_at")
     .eq("mentor", mentor)
     .order("expense_date", { ascending: false });
 
@@ -1925,165 +1945,135 @@ async function renderMentorExpenses() {
     return;
   }
 
-  container.innerHTML = (data || []).map(item => `
-    <div class="slot-card">
-      <p><strong>${escapeHtml(item.category || item.expense_type)}</strong></p>
-      <p>${formatDisplayDate(item.expense_date)}</p>
-      ${item.miles ? `<p>${item.miles} miles</p>` : ""}
-      ${item.amount ? `<p>£${Number(item.amount).toFixed(2)}</p>` : ""}
-      <p>${escapeHtml(item.reason || "")}</p>
-      <p>Status: <strong>${escapeHtml(item.status || "Pending")}</strong></p>
-      ${item.receipt_url ? `<a class="download-link" href="${escapeHtml(item.receipt_url)}" target="_blank" rel="noopener">VIEW RECEIPT</a>` : ""}
-    </div>
-  `).join("") || "<p>No expense claims submitted.</p>";
+  container.innerHTML = (data || []).map(item => {
+    const status = item.status === "Paid" ? "Paid" : "Submitted";
+    const dateToShow = status === "Paid" && item.paid_at
+      ? new Date(item.paid_at).toLocaleDateString("en-GB", { day:"numeric", month:"long", year:"numeric" })
+      : formatDisplayDate(item.expense_date);
+    return `
+      <div class="expense-compact-card">
+        <strong>${escapeHtml(item.mentor_display_name || mentor)}</strong>
+        <span>£${Number(item.amount || 0).toFixed(2)}</span>
+        <span class="expense-status ${status.toLowerCase()}">${status}</span>
+        <small>${escapeHtml(dateToShow)}</small>
+      </div>`;
+  }).join("") || "<p>No expense claims submitted.</p>";
 }
 
-/* =========================
-   MEMBERS
-========================= */
-
-let membersCache = [];
-
-async function addMember() {
-  const name = document.getElementById("memberName")?.value.trim() || "";
-  const djMcName = document.getElementById("memberDjMcName")?.value.trim() || "";
-  const type = document.getElementById("memberType")?.value || "";
-
-  if (!name || !type) {
-    alert("Please enter the member name and select a type");
-    return;
-  }
-
-  const { error } = await db
-    .from("members")
-    .insert([{
-      name,
-      dj_mc_name: djMcName || null,
-      type
-    }]);
-
-  if (error) {
-    console.error("Error adding member:", error);
-    alert("Error adding member");
-    return;
-  }
-
-  document.getElementById("memberName").value = "";
-  document.getElementById("memberDjMcName").value = "";
-  document.getElementById("memberType").value = "";
-
-  await renderMembers();
-  await loadDashboard();
-}
-
-async function renderMembers() {
-  const container = document.getElementById("adminMembers");
+async function renderAdminExpenses() {
+  const container = document.getElementById("adminExpenses");
   if (!container) return;
 
   const { data, error } = await db
-    .from("members")
+    .from("expenses")
     .select("*")
-    .order("name", { ascending: true });
+    .order("created_at", { ascending: false });
 
   if (error) {
-    console.error("Error loading members:", error);
-    container.innerHTML = '<p class="error-text">Error loading members.</p>';
+    console.error(error);
+    container.innerHTML = "<p>Error loading expenses.</p>";
     return;
   }
 
-  membersCache = data || [];
-  filterMembers();
+  const filteredExpenses = (data || []).filter(item => !currentExpenseFilter || (item.status || "Submitted") === currentExpenseFilter);
+
+  container.innerHTML = filteredExpenses.map(item => {
+    const status = item.status === "Paid" ? "Paid" : "Submitted";
+    const dateToShow = status === "Paid" && item.paid_at
+      ? new Date(item.paid_at).toLocaleDateString("en-GB", { day:"numeric", month:"long", year:"numeric" })
+      : formatDisplayDate(item.expense_date);
+    return `
+      <div class="slot-card expense-admin-card">
+        <p><strong>${escapeHtml(item.mentor_display_name || item.mentor || "Mentor")}</strong></p>
+        <p>£${Number(item.amount || 0).toFixed(2)}</p>
+        <p><span class="expense-status ${status.toLowerCase()}">${status}</span></p>
+        <p>${escapeHtml(dateToShow)}</p>
+        <details>
+          <summary>VIEW DETAILS</summary>
+          <p>${escapeHtml(item.category || item.expense_type || "Expense")}</p>
+          ${item.miles ? `<p>${Number(item.miles)} miles</p>` : ""}
+          <p>${escapeHtml(item.reason || "")}</p>
+          ${item.receipt_url ? `<p><a href="${escapeHtml(item.receipt_url)}" target="_blank" rel="noopener">VIEW RECEIPT</a></p>` : ""}
+        </details>
+        ${status !== "Paid" ? `<button onclick="markExpensePaid('${item.id}')">MARK AS PAID</button>` : ""}
+      </div>`;
+  }).join("") || "<p>No expense claims submitted.</p>";
 }
 
-function filterMembers() {
-  const container = document.getElementById("adminMembers");
-  if (!container) return;
-
-  const search = (document.getElementById("memberSearch")?.value || "")
-    .trim()
-    .toLowerCase();
-  const typeFilter = document.getElementById("memberTypeFilter")?.value || "";
-
-  const filtered = membersCache.filter(member => {
-    const name = (member.name || "").toLowerCase();
-    const djMcName = (member.dj_mc_name || "").toLowerCase();
-    const matchesSearch = !search || name.includes(search) || djMcName.includes(search);
-    const matchesType = !typeFilter || member.type === typeFilter;
-    return matchesSearch && matchesType;
-  });
-
-  if (filtered.length === 0) {
-    container.innerHTML = '<p>No matching members found.</p>';
-    return;
-  }
-
-  container.innerHTML = filtered.map(member => `
-    <div class="member-card">
-      <div class="member-card-header">
-        <div>
-          <h3>${escapeHtml(member.name || "Unnamed member")}</h3>
-          ${member.dj_mc_name
-            ? `<p class="member-alias">DJ / MC Name: ${escapeHtml(member.dj_mc_name)}</p>`
-            : ""}
-        </div>
-        <span class="member-type-badge ${getMemberTypeClass(member.type)}">
-          ${escapeHtml(member.type || "Other")}
-        </span>
-      </div>
-      <div class="member-card-footer">
-        <span>Added ${formatShortDate(member.created_at)}</span>
-        <button class="small-danger-btn" onclick="removeMember('${member.id}')">DELETE</button>
-      </div>
-    </div>
-  `).join("");
-}
-
-async function removeMember(id) {
-  const confirmDelete = confirm("Remove this member?");
-  if (!confirmDelete) return;
-
+async function markExpensePaid(id) {
+  if (!confirm("Mark this expense as paid?")) return;
   const { error } = await db
-    .from("members")
-    .delete()
+    .from("expenses")
+    .update({ status: "Paid", paid_at: new Date().toISOString() })
     .eq("id", id);
 
   if (error) {
-    console.error("Error removing member:", error);
-    alert("Error removing member");
+    console.error(error);
+    alert("Error updating expense");
     return;
   }
 
-  await renderMembers();
-  await loadDashboard();
+  await Promise.all([renderAdminExpenses(), renderMentorExpenses()]);
 }
 
-function formatShortDate(value) {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  return date.toLocaleDateString("en-GB");
+
+let currentExpenseFilter = "Submitted";
+function setExpenseFilter(value){ currentExpenseFilter=value; renderAdminExpenses(); }
+
+async function adminPageGuard(){
+  const protectedPage=document.getElementById("adminProtectedPage");
+  if(!protectedPage) return;
+  if(localStorage.getItem("adminLoggedIn")!=="true"){ window.location.replace("admin.html"); return; }
+  protectedPage.style.display="block";
 }
 
-function getMemberTypeClass(type) {
-  const classes = {
-    "Lessons Paid": "type-paid",
-    "Lessons Funded": "type-funded",
-    "Membership": "type-membership",
-    "Part Funded": "type-part-funded",
-    "Other": "type-other"
-  };
-  return classes[type] || "type-other";
+async function loadAdminHomeSummary(){
+  const box=document.getElementById("adminActionSummary"); if(!box) return;
+  const [{data:messages},{data:expenses},{data:bookings}] = await Promise.all([
+    db.from("messages").select("id,is_read").eq("is_read",false),
+    db.from("expenses").select("id,status").eq("status","Submitted"),
+    db.from("bookings").select("id,date").eq("date",getTodayDate())
+  ]);
+  const items=[];
+  if(messages?.length) items.push(`<a href="admin-messages.html">💬 ${messages.length} Unread Message${messages.length===1?"":"s"}</a>`);
+  if(expenses?.length) items.push(`<a href="admin-expenses.html">💷 ${expenses.length} Pending Expense${expenses.length===1?"":"s"}</a>`);
+  if(bookings?.length) items.push(`<a href="admin-sessions.html">📅 ${bookings.length} Booking${bookings.length===1?"":"s"} Today</a>`);
+  box.innerHTML=items.length?items.join(""):'<p class="all-clear">Everything is up to date. ✅</p>';
 }
 
-function escapeHtml(value) {
-  return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
+async function renderAdminMessages(){
+ const c=document.getElementById("adminMessages"); if(!c) return;
+ const {data,error}=await db.from("messages").select("*").order("created_at",{ascending:false});
+ if(error){c.innerHTML="<p>No messages available yet.</p>";return;}
+ const q=(document.getElementById("adminMessageSearch")?.value||"").toLowerCase();
+ const rows=(data||[]).filter(m=>JSON.stringify(m).toLowerCase().includes(q));
+ c.innerHTML=rows.map(m=>`<div class="slot-card"><p><strong>${escapeHtml(m.parent_name||m.sender_name||"Message")}</strong></p><p>${escapeHtml(m.child_name||m.member_name||"")}</p><p>${escapeHtml(m.message||m.body||"")}</p><small>${m.created_at?new Date(m.created_at).toLocaleString("en-GB"):""}</small></div>`).join("")||"<p>No messages.</p>";
 }
 
+async function saveNewsletter(){
+ const title=document.getElementById("newsletterTitle")?.value.trim()||""; const published_date=document.getElementById("newsletterDate")?.value||getTodayDate(); const file_url=document.getElementById("newsletterUrl")?.value.trim()||"";
+ if(!title||!file_url){alert("Please add a title and PDF link");return;}
+ const {error}=await db.from("newsletters").insert([{title,published_date,file_url}]); if(error){console.error(error);alert("Error saving newsletter");return;} alert("Newsletter saved"); renderAdminNewsletters();
+}
+async function renderAdminNewsletters(){
+ const c=document.getElementById("adminNewsletters"); if(!c)return; const {data,error}=await db.from("newsletters").select("*").order("published_date",{ascending:false}); if(error){c.innerHTML="<p>No newsletters available.</p>";return;}
+ c.innerHTML=(data||[]).map(n=>`<div class="slot-card"><p><strong>${escapeHtml(n.title)}</strong></p><p>${formatDisplayDate(n.published_date)}</p><a href="${escapeHtml(n.file_url)}" target="_blank">OPEN PDF</a><button class="danger-btn" onclick="deleteNewsletter('${n.id}')">DELETE</button></div>`).join("")||"<p>No newsletters yet.</p>";
+}
+async function deleteNewsletter(id){if(!confirm("Delete this newsletter?"))return;await db.from("newsletters").delete().eq("id",id);renderAdminNewsletters();}
+
+async function upsertSetting(key,value){ const {error}=await db.from("app_settings").upsert({setting_key:key,setting_value:value,updated_at:new Date().toISOString()}); if(error) throw error; }
+async function saveParentPasswordSetting(){const v=document.getElementById("settingParentPassword")?.value||"";if(!v){alert("Enter a password");return;}await upsertSetting("parent_password",v);localStorage.setItem("r4arParentPassword",v);PARENT_PASSWORD=v;alert("Parent password updated");}
+async function saveAdminPasswordSetting(){const v=document.getElementById("settingAdminPassword")?.value||"";if(!v){alert("Enter a password");return;}await upsertSetting("admin_password",v);localStorage.setItem("r4arAdminPassword",v);ADMIN_PASSWORD=v;alert("Admin password updated");}
+async function saveOrganisationSettings(){for(const [k,id] of [["contact_email","settingContactEmail"],["contact_phone","settingContactPhone"],["website","settingWebsite"],["donation_url","settingDonationUrl"]]) await upsertSetting(k,document.getElementById(id)?.value.trim()||"");alert("Organisation details saved");}
+async function saveBookingSettings(){await upsertSetting("session_length",document.getElementById("settingSessionLength")?.value||"60");await upsertSetting("booking_window",document.getElementById("settingBookingWindow")?.value||"12");alert("Booking settings saved");}
+async function loadSettingsPage(){
+ const {data}=await db.from("app_settings").select("*"); const map=Object.fromEntries((data||[]).map(x=>[x.setting_key,x.setting_value]));
+ const ids={contact_email:"settingContactEmail",contact_phone:"settingContactPhone",website:"settingWebsite",donation_url:"settingDonationUrl",session_length:"settingSessionLength",booking_window:"settingBookingWindow"}; Object.entries(ids).forEach(([k,id])=>{const el=document.getElementById(id);if(el)el.value=map[k]||"";});
+ const c=document.getElementById("mentorPasswordResetList"); if(c){const {data:mentors}=await db.from("mentors").select("id,name,artist_name").order("name");c.innerHTML=(mentors||[]).map(m=>`<div class="reset-row"><span>${escapeHtml(m.artist_name||m.name)}</span><button onclick="resetMentorPassword('${m.id}','${escapeHtml((m.artist_name||m.name).replace(/'/g,"&#39;"))}')">RESET</button></div>`).join("");}
+}
+
+function downloadCsv(filename, rows){if(!rows?.length){alert("No data to export");return;}const headers=[...new Set(rows.flatMap(r=>Object.keys(r)))];const esc=v=>`"${String(v??"").replace(/"/g,'""')}"`;const csv=[headers.map(esc).join(","),...rows.map(r=>headers.map(h=>esc(r[h])).join(","))].join("\n");const blob=new Blob([csv],{type:"text/csv;charset=utf-8"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=filename;a.click();URL.revokeObjectURL(a.href);}
+async function exportAdminReport(type){const table={members:"members",mentors:"mentors",sessions:"sessions",bookings:"bookings",expenses:"expenses"}[type];if(!table)return;const {data,error}=await db.from(table).select("*");if(error){alert("Error exporting report");return;}downloadCsv(`r4ar-${type}-${getTodayDate()}.csv`,data||[]);}
 /* =========================
    PAGE LOAD
 ========================= */
@@ -2098,6 +2088,17 @@ window.onload = () => {
   loadSearchFilters();
   checkAdminLogin();
   checkMentorLogin();
+  adminPageGuard();
+  loadAdminHomeSummary();
+  renderAdminExpenses();
+  renderAdminMessages();
+  renderAdminNewsletters();
+  loadSettingsPage();
+
+  const mentorAdminSearch = document.getElementById("mentorAdminSearch");
+  if (mentorAdminSearch) mentorAdminSearch.addEventListener("input", renderAdminMentors);
+  const adminMessageSearch = document.getElementById("adminMessageSearch");
+  if (adminMessageSearch) adminMessageSearch.addEventListener("input", renderAdminMessages);
 
   const memberSearch = document.getElementById("memberSearch");
   const memberTypeFilter = document.getElementById("memberTypeFilter");
