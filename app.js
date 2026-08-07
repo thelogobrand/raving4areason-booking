@@ -1252,8 +1252,8 @@ async function renderMentorBookedSessions() {
       <p>Parent: ${escapeHtml(booking.parent || "")}</p>
       <p>${escapeHtml(booking.type || "")}</p>
       <p>${escapeHtml(booking.location || "")}</p>
-      <p>${formatDisplayDate(booking.date)}</p>
-      <p>${escapeHtml(booking.time || "")}</p>
+      <p><strong>📅 ${formatDisplayDate(booking.date)}</strong></p>
+      <p><strong>🕒 ${escapeHtml(booking.time || "")}</strong></p>
       ${booking.notes ? `
         <div class="booking-note">
           <strong>Parent notes</strong>
@@ -1835,18 +1835,38 @@ async function renderMentorMessages() {
     return;
   }
 
-  container.innerHTML = (data || []).map(message => `
-    <div class="slot-card ${message.is_read ? "" : "unread-card"}">
-      <p><strong>${escapeHtml(message.child_name || "Booking message")}</strong></p>
-      <p>From: ${escapeHtml(message.sender_name || "Parent/Admin")}</p>
-      <p>${escapeHtml(message.message || "")}</p>
-      <p class="small-muted">${new Date(message.created_at).toLocaleString("en-GB")}</p>
-      ${message.booking_id ? `
-        <textarea id="reply-${message.id}" class="mentor-textarea" placeholder="Write a reply"></textarea>
-        <button onclick="replyToMentorMessage('${message.id}', '${message.booking_id}')">REPLY</button>
-      ` : ""}
-    </div>
-  `).join("") || "<p>No messages yet.</p>";
+  const messages = data || [];
+  const bookingIds = [...new Set(messages.map(m => m.booking_id).filter(Boolean))];
+  let bookingMap = {};
+
+  if (bookingIds.length) {
+    const { data: bookings } = await db
+      .from("bookings")
+      .select("id,date,time,child,parent,type,location")
+      .in("id", bookingIds);
+    (bookings || []).forEach(b => { bookingMap[b.id] = b; });
+  }
+
+  container.innerHTML = messages.map(message => {
+    const booking = message.booking_id ? bookingMap[message.booking_id] : null;
+    const sessionLine = booking
+      ? `<p class="message-session-line"><strong>📅 ${formatDisplayDate(booking.date)} at ${escapeHtml(booking.time || "")}</strong></p>`
+      : "";
+
+    return `
+      <div class="slot-card ${message.is_read ? "" : "unread-card"}">
+        <p><strong>${escapeHtml(message.child_name || booking?.child || "Booking message")}</strong></p>
+        ${sessionLine}
+        <p>From: ${escapeHtml(message.sender_name || "Parent/Admin")}</p>
+        <p>${escapeHtml(message.message || "")}</p>
+        <p class="small-muted">${new Date(message.created_at).toLocaleString("en-GB")}</p>
+        ${message.booking_id ? `
+          <textarea id="reply-${message.id}" class="mentor-textarea" placeholder="Write a reply"></textarea>
+          <button onclick="replyToMentorMessage('${message.id}', '${message.booking_id}')">REPLY</button>
+        ` : ""}
+      </div>
+    `;
+  }).join("") || "<p>No messages yet.</p>";
 }
 
 async function replyToMentorMessage(messageId, bookingId) {
@@ -1910,12 +1930,21 @@ async function renderMentorNewsletter() {
   `).join("") || "<p>No newsletter has been uploaded yet.</p>";
 }
 
+const DEFAULT_MILEAGE_RATE = 0.45;
+
+function updateMileageAmount() {
+  const miles = Number(document.getElementById("expenseMiles")?.value || 0);
+  const output = document.getElementById("mileageClaimAmount");
+  if (output) output.textContent = `£${(miles * DEFAULT_MILEAGE_RATE).toFixed(2)}`;
+}
+
 function updateExpenseFields() {
   const type = document.getElementById("expenseType")?.value || "mileage";
   const mileage = document.getElementById("mileageFields");
   const receipt = document.getElementById("receiptFields");
   if (mileage) mileage.style.display = type === "mileage" ? "block" : "none";
   if (receipt) receipt.style.display = type === "receipt" ? "block" : "none";
+  updateMileageAmount();
 }
 
 async function submitMentorExpense() {
@@ -1924,7 +1953,10 @@ async function submitMentorExpense() {
   const expenseDate = document.getElementById("expenseDate")?.value || "";
   const reason = document.getElementById("expenseReason")?.value.trim() || "";
   const miles = Number(document.getElementById("expenseMiles")?.value || 0);
-  const amount = Number(document.getElementById("expenseAmount")?.value || 0);
+  const manualAmount = Number(document.getElementById("expenseAmount")?.value || 0);
+  const amount = expenseType === "mileage"
+    ? Number((miles * DEFAULT_MILEAGE_RATE).toFixed(2))
+    : manualAmount;
   const category = document.getElementById("expenseCategory")?.value || null;
   const receiptFile = document.getElementById("expenseReceipt")?.files?.[0] || null;
 
@@ -1954,17 +1986,20 @@ async function submitMentorExpense() {
     receiptUrl = db.storage.from("expense-receipts").getPublicUrl(path).data.publicUrl;
   }
 
-  const { error } = await db.from("expenses").insert([{
+  const expenseRecord = {
     mentor,
     expense_type: expenseType,
     expense_date: expenseDate,
     miles: expenseType === "mileage" ? miles : null,
-    amount: expenseType === "receipt" ? amount : null,
+    amount,
+    mileage_rate: expenseType === "mileage" ? DEFAULT_MILEAGE_RATE : null,
     category: expenseType === "receipt" ? category : "Mileage",
     reason,
     receipt_url: receiptUrl,
-    status: "Pending"
-  }]);
+    status: "Submitted"
+  };
+
+  const { error } = await db.from("expenses").insert([expenseRecord]);
 
   if (error) {
     console.error(error);
@@ -1976,7 +2011,19 @@ async function submitMentorExpense() {
   document.getElementById("expenseAmount").value = "";
   document.getElementById("expenseReason").value = "";
   document.getElementById("expenseReceipt").value = "";
+  updateMileageAmount();
   await renderMentorExpenses();
+
+  try {
+    await fetch("/.netlify/functions/send-expense-email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ expense: expenseRecord })
+    });
+  } catch (emailError) {
+    console.warn("Expense saved but email notification failed", emailError);
+  }
+
   alert("Expense submitted");
 }
 

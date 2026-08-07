@@ -94,7 +94,11 @@
         <input type="date" id="expenseDate">
 
         <div id="mileageFields">
-          <input type="number" id="expenseMiles" min="0" step="0.1" placeholder="Miles travelled">
+          <input type="number" id="expenseMiles" min="0" step="0.1" placeholder="Miles travelled" oninput="updateMileageAmount()">
+          <div class="mileage-summary">
+            <p>Rate: <strong>£0.45 per mile</strong></p>
+            <p>Claim amount: <strong id="mileageClaimAmount">£0.00</strong></p>
+          </div>
         </div>
 
         <div id="receiptFields" style="display:none;">
@@ -129,8 +133,8 @@
             <span class="profile-camera-badge">📷</span>
           </button>
           <p class="small-muted">Tap the photo to change it</p>
-          <input type="file" id="mentorCameraInput" accept="image/*" capture="user" hidden onchange="handleMentorPhotoSelected(this)">
-          <input type="file" id="mentorGalleryInput" accept="image/*" hidden onchange="handleMentorPhotoSelected(this)">
+          <input type="file" id="mentorCameraInput" accept="image/*" capture="user" hidden style="display:none" onchange="handleMentorPhotoSelected(this)">
+          <input type="file" id="mentorGalleryInput" accept="image/*" hidden style="display:none" onchange="handleMentorPhotoSelected(this)">
         </div>
 
         <label class="field-label" for="profileName">Name</label>

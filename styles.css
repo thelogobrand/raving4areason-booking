@@ -699,3 +699,44 @@ input[type="file"] { padding:9px; }
   opacity: .72;
   cursor: not-allowed;
 }
+
+
+/* ===== MENTOR FINISH PATCH ===== */
+[hidden] { display: none !important; }
+
+/* Larger, centred dashboard avatar */
+.mentor-hero .mentor-avatar-button {
+  position: static;
+  width: 92px;
+  height: 92px;
+  min-width: 92px;
+  max-width: 92px;
+  margin: 0 auto 14px;
+  border-width: 3px;
+}
+.mentor-hero .mentor-avatar-initials { font-size: 25px; }
+.mentor-hero { padding-top: 20px; }
+
+.mileage-summary {
+  width: 90%;
+  max-width: 340px;
+  margin: 6px auto 14px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255,215,0,.32);
+  border-radius: 10px;
+  background: #111;
+  text-align: left;
+}
+.mileage-summary p { margin: 4px 0; }
+#mileageClaimAmount { color: #ffd700; font-size: 18px; }
+.message-session-line { color: #ffd700; }
+
+@media (max-width:480px) {
+  .mentor-hero .mentor-avatar-button {
+    width: 86px;
+    height: 86px;
+    min-width: 86px;
+    max-width: 86px;
+  }
+  .mentor-hero { padding-top: 18px; }
+}
