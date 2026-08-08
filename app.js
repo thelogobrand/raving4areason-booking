@@ -94,7 +94,7 @@ function checkParentLogin() {
 
 function requireParentLogin() {
   const page = window.location.pathname.split("/").pop() || "index.html";
-  const protectedPages = ["book.html", "weekly-calendar.html", "newsletter.html", "contact.html"];
+  const protectedPages = ["book.html", "weekly-calendar.html", "newsletter.html", "contact.html", "parent-admin-chat.html"];
   if (protectedPages.includes(page) && localStorage.getItem("parentLoggedIn") !== "true") {
     window.location.replace("index.html");
     return false;
@@ -108,6 +108,20 @@ function goToNewsletter() {
 
 function goToContact() {
   window.location.href = "contact.html";
+}
+
+function goToParentAdminChat() {
+  window.location.href = "parent-admin-chat.html";
+}
+
+function goToBookingChat() {
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get("chat_token") || "";
+  if (!token) {
+    alert("No chat link is available for this booking.");
+    return;
+  }
+  window.location.href = `booking-chat.html?token=${encodeURIComponent(token)}`;
 }
 
 function openDonationPage() {
@@ -761,7 +775,9 @@ async function confirmBooking() {
     return;
   }
 
-  const { error } = await db
+  const chatToken = (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`) + "-" + Math.random().toString(36).slice(2);
+
+  const { data: savedBooking, error } = await db
     .from("bookings")
     .insert([{
       child: booking.child,
@@ -774,8 +790,11 @@ async function confirmBooking() {
       date: booking.rawDate,
       time: booking.time,
       paid: false,
-      notes: booking.notes || null
-    }]);
+      notes: booking.notes || null,
+      chat_token: chatToken
+    }])
+    .select("id,chat_token")
+    .single();
 
   if (error) {
     console.error(error);
@@ -784,24 +803,29 @@ async function confirmBooking() {
   }
 
   await removeBookedSlot(booking);
-await fetch("/.netlify/functions/send-booking-email", {
-method: "POST",
-headers: {
-"Content-Type": "application/json"
-},
-body: JSON.stringify({
-booking: {
-child: booking.child,
-parent: booking.parent,
-phone: phone,
-date: booking.date,
-time: booking.time,
-location: booking.location,
-type: booking.type,
-parent_email: booking.email
-}
-})
-});
+  const chatUrl = `${window.location.origin}/booking-chat.html?token=${encodeURIComponent(chatToken)}`;
+  try {
+    await fetch("/.netlify/functions/send-booking-email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        booking: {
+          child: booking.child,
+          parent: booking.parent,
+          phone: phone,
+          date: booking.date,
+          time: booking.time,
+          location: booking.location,
+          type: booking.type,
+          mentor: booking.mentor,
+          parent_email: booking.email,
+          chat_url: chatUrl
+        }
+      })
+    });
+  } catch (emailError) {
+    console.warn("Booking saved but confirmation email failed", emailError);
+  }
 
   const params = new URLSearchParams({
     child: booking.child,
@@ -812,7 +836,9 @@ parent_email: booking.email
     type: booking.type,
     location: booking.location,
     date: booking.rawDate,
-    time: booking.time
+    time: booking.time,
+    booking_id: savedBooking?.id || "",
+    chat_token: chatToken
   });
 
   window.location.href = `confirmed.html?${params.toString()}`;
@@ -854,7 +880,9 @@ function getConfirmedData() {
     location: params.get("location") || "",
     rawDate,
     date: rawDate ? formatDisplayDate(rawDate) : "",
-    time: params.get("time") || ""
+    time: params.get("time") || "",
+    booking_id: params.get("booking_id") || "",
+    chat_token: params.get("chat_token") || ""
   };
 }
 
@@ -931,46 +959,41 @@ function addToCalendar() {
 
 async function loadAdminDropdowns() {
   const typeSelect = document.getElementById("type");
-  const mentorInput = document.getElementById("mentor");
-  const mentorList = document.getElementById("mentorList");
-  const locationList = document.getElementById("locationList");
-  const newMentorLocationInput = document.getElementById("newMentorLocation");
+  const mentorControl = document.getElementById("mentor");
+  const locationControl = document.getElementById("location");
+  const newMentorLocation = document.getElementById("newMentorLocation");
+  if (!typeSelect || !mentorControl) return;
 
-  if (!typeSelect || !mentorInput || !mentorList || !locationList) return;
+  const [{ data: locations }, { data: mentors }] = await Promise.all([
+    db.from("locations").select("*").order("name", { ascending: true }),
+    db.from("mentors").select("*").order("name", { ascending: true })
+  ]);
 
-  const { data: locations } = await db
-    .from("locations")
-    .select("*")
-    .order("name", { ascending: true });
+  const locationOptions = '<option value="">Select Location</option>' + (locations || [])
+    .map(l => `<option value="${escapeHtml(l.name)}">${escapeHtml(l.name)}</option>`).join("");
+  if (locationControl?.tagName === "SELECT") locationControl.innerHTML = locationOptions;
+  if (newMentorLocation?.tagName === "SELECT") newMentorLocation.innerHTML = locationOptions;
 
-  locationList.innerHTML = "";
-  (locations || []).forEach(location => {
-    locationList.innerHTML += `<option value="${location.name}">`;
-  });
-
-  if (newMentorLocationInput) {
-    newMentorLocationInput.setAttribute("list", "locationList");
+  function mentorSupportsType(mentor, selectedType) {
+    if (!selectedType) return true;
+    const raw = mentor.type || mentor.default_type || "";
+    if (Array.isArray(raw)) return raw.includes(selectedType);
+    return String(raw).split(",").map(v => v.trim()).includes(selectedType) || String(raw) === selectedType;
   }
 
-  async function loadMentorsByType() {
+  function populateMentors() {
     const selectedType = typeSelect.value;
-    mentorInput.value = "";
-    mentorList.innerHTML = "";
-
-    if (!selectedType) return;
-
-    const { data: mentors } = await db
-      .from("mentors")
-      .select("*")
-      .eq("type", selectedType)
-      .order("name", { ascending: true });
-
-    (mentors || []).forEach(mentor => {
-      mentorList.innerHTML += `<option value="${mentor.name}">`;
-    });
+    const current = mentorControl.value;
+    const filtered = (mentors || []).filter(m => mentorSupportsType(m, selectedType));
+    if (mentorControl.tagName === "SELECT") {
+      mentorControl.innerHTML = '<option value="">Select Mentor</option>' + filtered
+        .map(m => `<option value="${escapeHtml(m.name)}">${escapeHtml(m.artist_name || m.name)}</option>`).join("");
+      if (filtered.some(m => m.name === current)) mentorControl.value = current;
+    }
   }
 
-  typeSelect.onchange = loadMentorsByType;
+  populateMentors();
+  typeSelect.onchange = populateMentors;
 }
 
 async function addMentor() {
@@ -1818,10 +1841,28 @@ function openMentorSection(sectionId) {
   section.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
+async function cleanupExpiredMessages() {
+  const cutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
+  try {
+    await db.from("messages").delete().lt("created_at", cutoff);
+  } catch (error) {
+    console.warn("Message cleanup skipped", error);
+  }
+}
+
+function messageDateTime(value) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "" : date.toLocaleString("en-GB", {
+    weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit"
+  });
+}
+
 async function renderMentorMessages() {
   const container = document.getElementById("mentorMessages");
   const mentorName = getLoggedInMentorName();
   if (!container || !mentorName) return;
+
+  await cleanupExpiredMessages();
 
   const { data, error } = await db
     .from("messages")
@@ -1831,76 +1872,118 @@ async function renderMentorMessages() {
 
   if (error) {
     console.error(error);
-    container.innerHTML = "<p>Messages are not available yet.</p>";
+    container.innerHTML = "<p>Unable to load messages.</p>";
     return;
   }
 
   const messages = data || [];
   const bookingIds = [...new Set(messages.map(m => m.booking_id).filter(Boolean))];
-  let bookingMap = {};
-
+  const bookingMap = {};
   if (bookingIds.length) {
-    const { data: bookings } = await db
-      .from("bookings")
+    const { data: bookings } = await db.from("bookings")
       .select("id,date,time,child,parent,type,location")
       .in("id", bookingIds);
     (bookings || []).forEach(b => { bookingMap[b.id] = b; });
   }
 
-  container.innerHTML = messages.map(message => {
-    const booking = message.booking_id ? bookingMap[message.booking_id] : null;
-    const sessionLine = booking
-      ? `<p class="message-session-line"><strong>📅 ${formatDisplayDate(booking.date)} at ${escapeHtml(booking.time || "")}</strong></p>`
-      : "";
+  const visible = messages.filter(m =>
+    m.thread_type === "booking" || m.thread_type === "mentor_admin" || m.thread_type === "admin_mentor" || m.thread_type === "broadcast"
+  );
 
-    return `
-      <div class="slot-card ${message.is_read ? "" : "unread-card"}">
-        <p><strong>${escapeHtml(message.child_name || booking?.child || "Booking message")}</strong></p>
-        ${sessionLine}
-        <p>From: ${escapeHtml(message.sender_name || "Parent/Admin")}</p>
-        <p>${escapeHtml(message.message || "")}</p>
-        <p class="small-muted">${new Date(message.created_at).toLocaleString("en-GB")}</p>
-        ${message.booking_id ? `
-          <textarea id="reply-${message.id}" class="mentor-textarea" placeholder="Write a reply"></textarea>
-          <button onclick="replyToMentorMessage('${message.id}', '${message.booking_id}')">REPLY</button>
-        ` : ""}
-      </div>
-    `;
-  }).join("") || "<p>No messages yet.</p>";
+  container.innerHTML = `
+    <div class="message-safety-note">Messages are kept for 14 days.</div>
+    <div class="message-compose-card">
+      <h3>Message Admin</h3>
+      <textarea id="mentorAdminMessage" class="mentor-textarea" placeholder="Type your message to admin"></textarea>
+      <button onclick="sendMentorAdminMessage()">SEND TO ADMIN</button>
+    </div>
+    ${visible.map(message => {
+      const booking = message.booking_id ? bookingMap[message.booking_id] : null;
+      const isForMentor = message.recipient === "mentor" || message.recipient === "both";
+      const sessionLine = booking
+        ? `<p class="message-session-line"><strong>📅 ${formatDisplayDate(booking.date)} at ${escapeHtml(booking.time || "")}</strong></p>`
+        : "";
+      const canReply = message.thread_type === "booking" && booking && isForMentor;
+      const adminReply = (message.thread_type === "mentor_admin" || message.thread_type === "admin_mentor") && isForMentor;
+      return `
+        <div class="slot-card ${(!message.is_read && isForMentor) ? "unread-card" : ""}">
+          <p><strong>${escapeHtml(booking?.child || (message.thread_type === "broadcast" ? "Admin announcement" : "Message"))}</strong></p>
+          ${sessionLine}
+          <p>From: ${escapeHtml(message.sender_name || (message.sender_role === "admin" ? "Admin" : "Parent"))}</p>
+          <p>${escapeHtml(message.message || "")}</p>
+          <p class="small-muted">${messageDateTime(message.created_at)}</p>
+          ${canReply ? `<textarea id="reply-${message.id}" class="mentor-textarea" placeholder="Reply to parent"></textarea><button onclick="replyToMentorMessage('${message.id}', '${message.booking_id}')">REPLY TO PARENT</button>` : ""}
+          ${adminReply ? `<textarea id="admin-reply-${message.id}" class="mentor-textarea" placeholder="Reply to admin"></textarea><button onclick="replyMentorToAdmin('${message.id}')">REPLY TO ADMIN</button>` : ""}
+        </div>`;
+    }).join("") || "<p>No messages yet.</p>"}
+  `;
+
+  const ids = visible.filter(m => !m.is_read && (m.recipient === "mentor" || m.recipient === "both")).map(m => m.id);
+  if (ids.length) await db.from("messages").update({ is_read: true }).in("id", ids);
 }
 
 async function replyToMentorMessage(messageId, bookingId) {
   const input = document.getElementById(`reply-${messageId}`);
   const text = input?.value.trim() || "";
-  if (!text) {
-    alert("Please write a reply");
-    return;
-  }
+  if (!text) return alert("Please write a reply");
 
-  const original = await db.from("messages").select("*").eq("id", messageId).single();
-  const row = original.data;
+  const { data: row } = await db.from("messages").select("*").eq("id", messageId).single();
   if (!row) return;
 
   const { error } = await db.from("messages").insert([{
     booking_id: bookingId,
     mentor: getLoggedInMentorName(),
     child_name: row.child_name,
+    parent_email: row.parent_email,
     sender_name: getLoggedInMentorName(),
+    sender_role: "mentor",
     recipient: "parent",
+    thread_type: "booking",
     message: text,
     is_read: false
   }]);
-
-  if (error) {
-    console.error(error);
-    alert("Error sending reply");
-    return;
-  }
-
-  await db.from("messages").update({ is_read: true }).eq("id", messageId);
+  if (error) return alert("Error sending reply");
   input.value = "";
-  await Promise.all([renderMentorMessages(), loadMentorDashboard()]);
-  alert("Reply sent");
+  await renderMentorMessages();
+}
+
+async function sendMentorAdminMessage() {
+  const input = document.getElementById("mentorAdminMessage");
+  const text = input?.value.trim() || "";
+  const mentor = getLoggedInMentorName();
+  if (!text || !mentor) return alert("Please write a message");
+  const { error } = await db.from("messages").insert([{
+    mentor,
+    sender_name: mentor,
+    sender_role: "mentor",
+    recipient: "admin",
+    thread_type: "mentor_admin",
+    message: text,
+    is_read: false
+  }]);
+  if (error) return alert("Error sending message");
+  input.value = "";
+  await renderMentorMessages();
+  alert("Message sent to admin");
+}
+
+async function replyMentorToAdmin(messageId) {
+  const input = document.getElementById(`admin-reply-${messageId}`);
+  const text = input?.value.trim() || "";
+  const mentor = getLoggedInMentorName();
+  if (!text) return alert("Please write a reply");
+  const { error } = await db.from("messages").insert([{
+    mentor,
+    sender_name: mentor,
+    sender_role: "mentor",
+    recipient: "admin",
+    thread_type: "mentor_admin",
+    message: text,
+    is_read: false
+  }]);
+  if (error) return alert("Error sending reply");
+  input.value = "";
+  await renderMentorMessages();
 }
 
 async function renderMentorNewsletter() {
@@ -2203,6 +2286,183 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
+
+/* =========================
+   MESSAGING V2
+========================= */
+let currentBookingChat = null;
+let currentParentAdminIdentity = null;
+
+async function loadBookingChatPage() {
+  const details = document.getElementById("bookingChatDetails");
+  if (!details) return;
+  await cleanupExpiredMessages();
+  const token = new URLSearchParams(window.location.search).get("token") || "";
+  if (!token) {
+    details.innerHTML = "<p>Invalid booking chat link.</p>";
+    return;
+  }
+  const { data: booking, error } = await db.from("bookings").select("*").eq("chat_token", token).single();
+  if (error || !booking) {
+    details.innerHTML = "<p>This booking chat link is invalid or unavailable.</p>";
+    return;
+  }
+  currentBookingChat = booking;
+  details.innerHTML = `
+    <p><strong>${escapeHtml(booking.child || "")}</strong></p>
+    <p>Mentor: ${escapeHtml(booking.mentor || "")}</p>
+    <p>${formatDisplayDate(booking.date)} at ${escapeHtml(booking.time || "")}</p>
+    <p>${escapeHtml(booking.type || "")} · ${escapeHtml(booking.location || "")}</p>`;
+  await renderParentBookingChat();
+}
+
+async function renderParentBookingChat() {
+  const container = document.getElementById("bookingChatMessages");
+  if (!container || !currentBookingChat) return;
+  const { data, error } = await db.from("messages").select("*")
+    .eq("booking_id", currentBookingChat.id)
+    .eq("thread_type", "booking")
+    .order("created_at", { ascending: true });
+  if (error) return container.innerHTML = "<p>Unable to load messages.</p>";
+  container.innerHTML = (data || []).map(m => `
+    <div class="chat-bubble ${m.sender_role === "parent" ? "chat-parent" : "chat-other"}">
+      <strong>${escapeHtml(m.sender_name || (m.sender_role === "mentor" ? currentBookingChat.mentor : "Parent"))}</strong>
+      <p>${escapeHtml(m.message || "")}</p>
+      <span>${messageDateTime(m.created_at)}</span>
+    </div>`).join("") || "<p>No messages yet. You can message your mentor below.</p>";
+  const ids=(data||[]).filter(m=>m.recipient==="parent"&&!m.is_read).map(m=>m.id);
+  if(ids.length) await db.from("messages").update({is_read:true}).in("id",ids);
+}
+
+async function sendParentBookingMessage() {
+  const input = document.getElementById("bookingChatInput");
+  const text = input?.value.trim() || "";
+  if (!text || !currentBookingChat) return alert("Please write a message");
+  const { error } = await db.from("messages").insert([{
+    booking_id: currentBookingChat.id,
+    mentor: currentBookingChat.mentor,
+    child_name: currentBookingChat.child,
+    parent_email: currentBookingChat.email,
+    sender_name: currentBookingChat.parent,
+    sender_role: "parent",
+    recipient: "mentor",
+    thread_type: "booking",
+    message: text,
+    is_read: false
+  }]);
+  if (error) return alert("Error sending message");
+  input.value = "";
+  await renderParentBookingChat();
+}
+
+async function copyBookingChat() {
+  if (!currentBookingChat) return;
+  const { data } = await db.from("messages").select("*").eq("booking_id", currentBookingChat.id).eq("thread_type", "booking").order("created_at", {ascending:true});
+  const text=(data||[]).map(m=>`${messageDateTime(m.created_at)} - ${m.sender_name || m.sender_role}: ${m.message}`).join("\n");
+  try { await navigator.clipboard.writeText(text || "No messages"); alert("Chat copied"); } catch { alert("Unable to copy chat on this device"); }
+}
+
+async function loadParentAdminChatPage() {
+  if (!document.getElementById("parentAdminChat")) return;
+  await cleanupExpiredMessages();
+  const saved = JSON.parse(localStorage.getItem("r4arParentChatIdentity") || "null");
+  if (saved?.name && saved?.email) {
+    document.getElementById("parentChatName").value = saved.name;
+    document.getElementById("parentChatEmail").value = saved.email;
+    currentParentAdminIdentity = saved;
+    await renderParentAdminChat();
+  }
+}
+
+async function openParentAdminConversation() {
+  const name = document.getElementById("parentChatName")?.value.trim() || "";
+  const email = document.getElementById("parentChatEmail")?.value.trim().toLowerCase() || "";
+  if (!name || !email || !email.includes("@")) return alert("Please enter your name and email");
+  currentParentAdminIdentity = {name,email};
+  localStorage.setItem("r4arParentChatIdentity", JSON.stringify(currentParentAdminIdentity));
+  await renderParentAdminChat();
+}
+
+async function renderParentAdminChat() {
+  const container = document.getElementById("parentAdminMessages");
+  const compose = document.getElementById("parentAdminCompose");
+  if (!container || !currentParentAdminIdentity) return;
+  if (compose) compose.style.display = "block";
+  const { data, error } = await db.from("messages").select("*")
+    .eq("thread_type", "parent_admin")
+    .eq("parent_email", currentParentAdminIdentity.email)
+    .order("created_at", {ascending:true});
+  if (error) return container.innerHTML="<p>Unable to load messages.</p>";
+  container.innerHTML=(data||[]).map(m=>`<div class="chat-bubble ${m.sender_role === "parent" ? "chat-parent" : "chat-other"}"><strong>${escapeHtml(m.sender_name || m.sender_role)}</strong><p>${escapeHtml(m.message)}</p><span>${messageDateTime(m.created_at)}</span></div>`).join("") || "<p>No messages yet.</p>";
+  const ids=(data||[]).filter(m=>m.recipient==="parent"&&!m.is_read).map(m=>m.id);
+  if(ids.length) await db.from("messages").update({is_read:true}).in("id",ids);
+}
+
+async function sendParentAdminMessage() {
+  const input=document.getElementById("parentAdminInput");
+  const text=input?.value.trim()||"";
+  if(!text||!currentParentAdminIdentity) return alert("Please write a message");
+  const {error}=await db.from("messages").insert([{
+    mentor:null,
+    parent_email:currentParentAdminIdentity.email,
+    sender_name:currentParentAdminIdentity.name,
+    sender_role:"parent",
+    recipient:"admin",
+    thread_type:"parent_admin",
+    message:text,
+    is_read:false
+  }]);
+  if(error) return alert("Error sending message");
+  input.value="";
+  await renderParentAdminChat();
+}
+
+async function copyParentAdminChat() {
+  if(!currentParentAdminIdentity) return;
+  const {data}=await db.from("messages").select("*").eq("thread_type","parent_admin").eq("parent_email",currentParentAdminIdentity.email).order("created_at",{ascending:true});
+  const text=(data||[]).map(m=>`${messageDateTime(m.created_at)} - ${m.sender_name || m.sender_role}: ${m.message}`).join("\n");
+  try { await navigator.clipboard.writeText(text||"No messages"); alert("Chat copied"); } catch { alert("Unable to copy chat on this device"); }
+}
+
+async function renderAdminMessages() {
+  const container=document.getElementById("adminMessages");
+  if(!container) return;
+  await cleanupExpiredMessages();
+  const {data,error}=await db.from("messages").select("*").order("created_at",{ascending:false}).limit(200);
+  if(error) return container.innerHTML="<p>Unable to load messages.</p>";
+  const incoming=(data||[]).filter(m=>m.recipient==="admin");
+  container.innerHTML=`<div class="message-safety-note">Messages are automatically removed after 14 days.</div>${incoming.map(m=>`<div class="slot-card ${m.is_read?"":"unread-card"}"><p><strong>${escapeHtml(m.sender_name || (m.sender_role === "mentor" ? m.mentor : "Parent"))}</strong></p><p>${escapeHtml(m.message||"")}</p><p class="small-muted">${messageDateTime(m.created_at)}</p><textarea id="adminReply-${m.id}" class="mentor-textarea" placeholder="Reply"></textarea><button onclick="replyAdminMessage('${m.id}')">REPLY</button></div>`).join("")||"<p>No messages for admin.</p>"}`;
+  const ids=incoming.filter(m=>!m.is_read).map(m=>m.id); if(ids.length) await db.from("messages").update({is_read:true}).in("id",ids);
+}
+
+async function replyAdminMessage(id) {
+  const input=document.getElementById(`adminReply-${id}`); const text=input?.value.trim()||""; if(!text) return alert("Please write a reply");
+  const {data:m}=await db.from("messages").select("*").eq("id",id).single(); if(!m) return;
+  const recipient=m.sender_role==="mentor"?"mentor":"parent";
+  const thread=m.sender_role==="mentor"?"admin_mentor":"parent_admin";
+  const {error}=await db.from("messages").insert([{
+    booking_id:m.booking_id||null, mentor:m.mentor||null, child_name:m.child_name||null, parent_email:m.parent_email||null,
+    sender_name:"Admin", sender_role:"admin", recipient, thread_type:thread, message:text, is_read:false
+  }]);
+  if(error) return alert("Error sending reply"); input.value=""; await renderAdminMessages();
+}
+
+async function loadAdminMessageMentors() {
+  const select=document.getElementById("adminMessageMentor"); if(!select) return;
+  const {data}=await db.from("mentors").select("name,artist_name").order("name");
+  select.innerHTML='<option value="">Select Mentor</option>'+(data||[]).map(m=>`<option value="${escapeHtml(m.name)}">${escapeHtml(m.artist_name||m.name)}</option>`).join("");
+}
+
+async function sendAdminMentorMessage(sendAll=false) {
+  const text=document.getElementById("adminMentorMessage")?.value.trim()||""; if(!text) return alert("Please write a message");
+  const {data:mentors}=await db.from("mentors").select("name");
+  let targets=[];
+  if(sendAll) targets=mentors||[]; else { const name=document.getElementById("adminMessageMentor")?.value||""; if(!name) return alert("Please select a mentor"); targets=[{name}]; }
+  const rows=targets.map(m=>({mentor:m.name,sender_name:"Admin",sender_role:"admin",recipient:"mentor",thread_type:sendAll?"broadcast":"admin_mentor",message:text,is_read:false}));
+  const {error}=await db.from("messages").insert(rows); if(error) return alert("Error sending message");
+  document.getElementById("adminMentorMessage").value=""; alert(sendAll?"Message sent to all mentors":"Message sent"); await renderAdminMessages();
+}
+
 /* =========================
    PAGE LOAD
 ========================= */
@@ -2217,6 +2477,10 @@ window.onload = () => {
   loadSearchFilters();
   checkAdminLogin();
   checkMentorLogin();
+  loadBookingChatPage();
+  loadParentAdminChatPage();
+  renderAdminMessages();
+  loadAdminMessageMentors();
 
   const memberSearch = document.getElementById("memberSearch");
   const memberTypeFilter = document.getElementById("memberTypeFilter");

@@ -58,11 +58,9 @@
             <option value="Production">Production</option>
           </select>
 
-          <input type="text" id="mentor" list="mentorList" placeholder="Select or type mentor">
-          <datalist id="mentorList"></datalist>
+          <select id="mentor"><option value="">Select Mentor</option></select>
 
-          <input type="text" id="location" list="locationList" placeholder="Select or type location">
-          <datalist id="locationList"></datalist>
+          <select id="location"><option value="">Select Location</option></select>
 
           <input type="text" id="time" list="timeList" placeholder="Select or type time">
           <datalist id="timeList">
@@ -95,7 +93,7 @@
             <option value="Production">Production</option>
           </select>
 
-          <input type="text" id="newMentorLocation" list="locationList" placeholder="Select or type location">
+          <select id="newMentorLocation"><option value="">Select Location</option></select>
           <button onclick="addMentor()">SAVE MENTOR</button>
         </div>
       </div>
@@ -115,6 +113,22 @@
         </div>
       </div>
 
+
+      <div class="admin-group">
+        <h2>MESSAGES</h2>
+        <button onclick="toggleSection('messagesSection'); renderAdminMessages(); loadAdminMessageMentors();" class="secondary">OPEN MESSAGES</button>
+        <div id="messagesSection" class="admin-section" style="display:none;">
+          <div class="form-panel">
+            <h3>Message Mentor</h3>
+            <select id="adminMessageMentor"><option value="">Select Mentor</option></select>
+            <textarea id="adminMentorMessage" class="mentor-textarea" placeholder="Write message"></textarea>
+            <button onclick="sendAdminMentorMessage(false)">SEND TO MENTOR</button>
+            <button onclick="sendAdminMentorMessage(true)" class="secondary">MESSAGE ALL MENTORS</button>
+          </div>
+          <h3>Inbox</h3>
+          <div id="adminMessages"></div>
+        </div>
+      </div>
 
       <div class="admin-group">
         <h2>EXPENSES</h2>

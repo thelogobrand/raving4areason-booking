@@ -740,3 +740,15 @@ input[type="file"] { padding:9px; }
   }
   .mentor-hero { padding-top: 18px; }
 }
+
+
+/* ===== MESSAGING V2 ===== */
+.message-safety-note{margin:10px auto 16px;padding:10px 12px;max-width:420px;border:1px solid rgba(255,215,0,.35);border-radius:12px;background:#111;color:#ddd;font-size:12px;line-height:1.4}
+.message-compose-card{margin:12px 0 18px;padding:12px;border:1px solid #222;border-radius:14px;background:#0d0d0d}
+.chat-list{margin:14px 0;display:flex;flex-direction:column;gap:10px}
+.chat-bubble{max-width:88%;padding:11px 13px;border-radius:14px;text-align:left;background:#171717;border:1px solid #292929}
+.chat-bubble p{margin:5px 0;white-space:pre-wrap}
+.chat-bubble span{font-size:10px;color:#888}
+.chat-parent{align-self:flex-end;border-color:rgba(255,215,0,.45);background:#211d08}
+.chat-other{align-self:flex-start}
+#messagesSection h3{margin-top:16px;color:#ffd700}
