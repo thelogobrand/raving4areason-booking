@@ -2399,21 +2399,38 @@ async function renderParentAdminChat() {
 }
 
 async function sendParentAdminMessage() {
-  const input=document.getElementById("parentAdminInput");
-  const text=input?.value.trim()||"";
-  if(!text||!currentParentAdminIdentity) return alert("Please write a message");
-  const {error}=await db.from("messages").insert([{
-    mentor:null,
-    parent_email:currentParentAdminIdentity.email,
-    sender_name:currentParentAdminIdentity.name,
-    sender_role:"parent",
-    recipient:"admin",
-    thread_type:"parent_admin",
-    message:text,
-    is_read:false
+  const input = document.getElementById("parentAdminInput");
+  const text = input?.value.trim() || "";
+
+  if (!text || !currentParentAdminIdentity) {
+    return alert("Please write a message");
+  }
+
+  const { error } = await db.from("messages").insert([{
+    mentor: null,
+    parent_email: currentParentAdminIdentity.email,
+    sender_name: currentParentAdminIdentity.name,
+    sender_role: "parent",
+    recipient: "admin",
+    thread_type: "parent_admin",
+    message: text,
+    is_read: false
   }]);
-  if(error) return alert("Error sending message");
-  input.value="";
+
+  if (error) {
+    console.error("Parent → Admin message error:", error);
+
+    alert(
+      "Message failed:\n\n" +
+      (error.message || "Unknown error") +
+      (error.details ? "\n\n" + error.details : "") +
+      (error.hint ? "\n\nHint: " + error.hint : "")
+    );
+
+    return;
+  }
+
+  input.value = "";
   await renderParentAdminChat();
 }
 
