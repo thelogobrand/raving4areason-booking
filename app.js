@@ -1951,9 +1951,13 @@ async function sendMentorAdminMessage() {
   const input = document.getElementById("mentorAdminMessage");
   const text = input?.value.trim() || "";
   const mentor = getLoggedInMentorName();
-  if (!text || !mentor) return alert("Please write a message");
+
+  if (!text || !mentor) {
+    return alert("Please write a message");
+  }
+
   const { error } = await db.from("messages").insert([{
-    mentor,
+    mentor: mentor,
     sender_name: mentor,
     sender_role: "mentor",
     recipient: "admin",
@@ -1961,7 +1965,20 @@ async function sendMentorAdminMessage() {
     message: text,
     is_read: false
   }]);
-  if (error) return alert("Error sending message");
+
+  if (error) {
+    console.error("Mentor → Admin message error:", error);
+
+    alert(
+      "Message failed:\n\n" +
+      (error.message || "Unknown error") +
+      (error.details ? "\n\n" + error.details : "") +
+      (error.hint ? "\n\nHint: " + error.hint : "")
+    );
+
+    return;
+  }
+
   input.value = "";
   await renderMentorMessages();
   alert("Message sent to admin");
