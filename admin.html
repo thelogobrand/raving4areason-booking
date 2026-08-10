@@ -24,7 +24,7 @@
     </div>
 
     <div id="adminPanel" style="display:none;">
-      <h1>Admin Panel</h1>
+      <div class="admin-top-row"><h1>Admin Panel</h1><button class="message-envelope" onclick="toggleSection('messagesSection');renderAdminMessages();loadAdminMessageMentors()" aria-label="Messages">✉️<span id="adminMessageBadge" class="message-badge"></span></button></div>
 
       <div class="admin-group dashboard-group">
         <h2>DASHBOARD</h2>
@@ -78,13 +78,15 @@
 
         <button onclick="toggleSection('mentorsSection')" class="secondary">CURRENT MENTORS</button>
         <div id="mentorsSection" class="admin-section" style="display:none;">
-          <div id="adminMentors"></div>
+          <input type="search" id="mentorAdminSearch" placeholder="Search mentors"><button class="secondary" onclick="printAdminList('mentors')">DOWNLOAD / PRINT PDF</button><div id="adminMentors"></div>
         </div>
 
         <button onclick="toggleSection('addMentorSection')" class="secondary">ADD MENTOR</button>
         <div id="addMentorSection" class="admin-section form-panel" style="display:none;">
-          <input type="text" id="newMentorName" placeholder="Mentor Name">
-          <input type="email" id="newMentorEmail" placeholder="Mentor Email">
+          <input type="text" id="newMentorArtistName" placeholder="Artist Name *">
+          <input type="email" id="newMentorEmail" placeholder="Email *">
+          <input type="text" id="newMentorName" placeholder="Full / Legal Name (optional)">
+          <input type="tel" id="newMentorPhone" placeholder="Phone Number (optional)">
 
           <select id="newMentorType">
             <option value="">Select Type</option>
@@ -93,30 +95,15 @@
             <option value="Production">Production</option>
           </select>
 
-          <select id="newMentorLocation"><option value="">Select Location</option></select>
+          <select id="newMentorLocation"><option value="">Default Location (optional)</option></select>
+          <textarea id="newMentorAdminNotes" placeholder="Admin notes (optional)"></textarea>
+          <label class="check-row"><input type="checkbox" id="newMentorDbsChecked"> DBS checked</label>
           <button onclick="addMentor()">SAVE MENTOR</button>
         </div>
       </div>
 
       <div class="admin-group">
-        <h2>LOCATIONS</h2>
-
-        <button onclick="toggleSection('locationsSection')" class="secondary">CURRENT LOCATIONS</button>
-        <div id="locationsSection" class="admin-section" style="display:none;">
-          <div id="adminLocations"></div>
-        </div>
-
-        <button onclick="toggleSection('addLocationSection')" class="secondary">ADD LOCATION</button>
-        <div id="addLocationSection" class="admin-section form-panel" style="display:none;">
-          <input type="text" id="newLocationName" placeholder="Location Name">
-          <button onclick="addLocation()">SAVE LOCATION</button>
-        </div>
-      </div>
-
-
-      <div class="admin-group">
         <h2>MESSAGES</h2>
-        <button onclick="toggleSection('messagesSection'); renderAdminMessages(); loadAdminMessageMentors();" class="secondary">OPEN MESSAGES</button>
         <div id="messagesSection" class="admin-section" style="display:none;">
           <div class="form-panel">
             <h3>Message Mentor</h3>
@@ -132,9 +119,9 @@
 
       <div class="admin-group">
         <h2>EXPENSES</h2>
-        <button onclick="toggleSection('expensesSection')" class="secondary">VIEW EXPENSES</button>
+        <button onclick="toggleSection('expensesSection');renderAdminExpenses()" class="secondary">VIEW EXPENSES</button>
         <div id="expensesSection" class="admin-section" style="display:none;">
-          <div id="adminExpenses"></div>
+          <div class="filter-tabs"><button onclick="setExpenseFilter('Submitted')">SUBMITTED</button><button class="secondary" onclick="setExpenseFilter('Approved')">APPROVED</button><button class="secondary" onclick="setExpenseFilter('Paid')">PAID</button></div><div id="adminExpenses"></div>
         </div>
       </div>
 
@@ -154,13 +141,19 @@
               <option value="Other">Other</option>
             </select>
           </div>
-          <div id="adminMembers"></div>
+          <button class="secondary" onclick="printAdminList('members')">DOWNLOAD / PRINT PDF</button><div id="adminMembers"></div>
         </div>
 
         <button onclick="toggleSection('addMemberSection')" class="secondary">ADD MEMBER</button>
         <div id="addMemberSection" class="admin-section form-panel" style="display:none;">
           <input type="text" id="memberName" placeholder="Member Name">
           <input type="text" id="memberDjMcName" placeholder="DJ / MC Name (optional)">
+          <input type="text" id="memberParentGuardian" placeholder="Parent / Guardian Name (optional)">
+          <input type="email" id="memberEmail" placeholder="Email (optional)">
+          <input type="tel" id="memberPhone" placeholder="Phone Number (optional)">
+          <p class="field-label">Preferred contact (optional)</p>
+          <div class="contact-checks"><label><input type="checkbox" name="memberContactPref" value="Email"> Email</label><label><input type="checkbox" name="memberContactPref" value="SMS"> SMS</label><label><input type="checkbox" name="memberContactPref" value="Phone"> Phone</label><label><input type="checkbox" name="memberContactPref" value="None"> None</label></div>
+          <label class="check-row"><input type="checkbox" id="memberMailingConsent"> Parent/guardian agrees to receive R4AR news & event emails</label>
           <select id="memberType">
             <option value="">Select Type</option>
             <option value="Lessons Paid">Lessons Paid</option>
@@ -173,6 +166,10 @@
         </div>
       </div>
 
+
+      <div class="admin-group"><h2>NEWS & EVENTS</h2><button class="secondary" onclick="toggleSection('newsEventsSection');renderAdminNewsEvents()">OPEN NEWS & EVENTS</button><div id="newsEventsSection" class="admin-section" style="display:none"><div class="form-panel"><h3>Add Newsletter</h3><input id="newsTitle" placeholder="Title"><input type="date" id="newsDate"><input type="url" id="newsUrl" placeholder="PDF / newsletter link"><button onclick="saveNewsletterFinal()">SAVE NEWSLETTER</button><h3>Add Upcoming Event</h3><input id="eventTitle" placeholder="Event title"><input type="date" id="eventDate"><input type="time" id="eventTime"><input id="eventLocation" placeholder="Location (optional)"><textarea id="eventDetails" placeholder="Event details (optional)"></textarea><button onclick="saveEvent()">SAVE EVENT</button></div><div id="adminNewsEvents"></div></div></div>
+      <div class="admin-group"><h2>PARENT MAILING LIST</h2><button class="secondary" onclick="toggleSection('mailingSection');renderMailingList()">OPEN MAILING LIST</button><div id="mailingSection" class="admin-section" style="display:none"><p class="small-muted">Only contacts with mailing consent are included.</p><div id="adminMailingList"></div></div></div>
+      <div class="admin-group"><h2>ACCOUNTS & SECURITY</h2><p class="small-muted">Mentor password changes remain available in each mentor profile. Admin login is currently the existing site admin account.</p></div>
       <div class="logout-section">
         <div class="logout-divider"></div>
         <button onclick="logoutAdmin()" class="logout-btn">LOG OUT</button>

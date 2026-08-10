@@ -173,6 +173,11 @@ function showAdminPanel() {
   renderAdminLocations();
   renderMembers();
   loadDashboard();
+  renderAdminExpenses();
+  renderAdminNewsEvents();
+  renderMailingList();
+  renderAdminMessages();
+  loadAdminMessageMentors();
 }
 
 function showLoginBox() {
@@ -314,71 +319,23 @@ function checkMentorLogin() {
 async function loadDashboard() {
   const container = document.getElementById("dashboardSummary");
   if (!container) return;
-
   container.innerHTML = '<p class="loading-text">Loading dashboard…</p>';
-
   const today = getTodayDate();
-
-  const [
-    membersResult,
-    mentorsResult,
-    locationsResult,
-    sessionsResult,
-    bookingsResult
-  ] = await Promise.all([
-    db.from("members").select("type"),
-    db.from("mentors").select("id", { count: "exact", head: true }),
-    db.from("locations").select("id", { count: "exact", head: true }),
-    db.from("sessions").select("id", { count: "exact", head: true }).gte("date", today),
-    db.from("bookings").select("id", { count: "exact", head: true }).gte("date", today)
+  const [members, mentors, sessions, bookings, unread, expenses] = await Promise.all([
+    db.from("members").select("id", {count:"exact", head:true}),
+    db.from("mentors").select("id", {count:"exact", head:true}),
+    db.from("sessions").select("id", {count:"exact", head:true}).gte("date", today),
+    db.from("bookings").select("id", {count:"exact", head:true}).gte("date", today),
+    db.from("messages").select("id", {count:"exact", head:true}).eq("recipient","admin").eq("is_read",false),
+    db.from("expenses").select("id", {count:"exact", head:true}).in("status",["Pending","Submitted"])
   ]);
-
-  const firstError = [
-    membersResult.error,
-    mentorsResult.error,
-    locationsResult.error,
-    sessionsResult.error,
-    bookingsResult.error
-  ].find(Boolean);
-
-  if (firstError) {
-    console.error("Dashboard error:", firstError);
-    container.innerHTML = '<p class="error-text">Unable to load dashboard totals.</p>';
-    return;
-  }
-
-  const membersData = membersResult.data || [];
-  const memberTypes = membersData.reduce((totals, member) => {
-    const type = member.type || "Other";
-    totals[type] = (totals[type] || 0) + 1;
-    return totals;
-  }, {});
-
-  const cards = [
-    { label: "Members", value: membersData.length, icon: "👥" },
-    { label: "Mentors", value: mentorsResult.count || 0, icon: "🎧" },
-    { label: "Available Sessions", value: sessionsResult.count || 0, icon: "📅" },
-    { label: "Upcoming Bookings", value: bookingsResult.count || 0, icon: "📝" },
-    { label: "Locations", value: locationsResult.count || 0, icon: "📍" },
-    { label: "Lessons Paid", value: memberTypes["Lessons Paid"] || 0, icon: "💷", type: "Lessons Paid" },
-    { label: "Lessons Funded", value: memberTypes["Lessons Funded"] || 0, icon: "💙", type: "Lessons Funded" },
-    { label: "Membership", value: memberTypes.Membership || 0, icon: "⭐", type: "Membership" },
-    { label: "Part Funded", value: memberTypes["Part Funded"] || 0, icon: "🟠", type: "Part Funded" },
-    { label: "Other", value: memberTypes.Other || 0, icon: "⚪", type: "Other" }
-  ].filter(card => card.value > 0);
-
-  if (cards.length === 0) {
-    container.innerHTML = '<p>No dashboard data yet.</p>';
-    return;
-  }
-
-  container.innerHTML = cards.map(card => `
-    <div class="dashboard-card${card.type ? " funding-card" : ""}">
-      <span class="dashboard-icon">${card.icon}</span>
-      <strong>${card.value}</strong>
-      <span>${card.label}</span>
-    </div>
-  `).join("");
+  const cards=[
+    ["Members",members.count||0,"👥"],["Mentors",mentors.count||0,"🎧"],
+    ["Available Sessions",sessions.count||0,"📅"],["Booked Sessions",bookings.count||0,"📝"],
+    ["Unread Messages",unread.count||0,"✉️"],["Submitted Expenses",expenses.count||0,"💷"]
+  ];
+  container.innerHTML=cards.map(c=>`<div class="dashboard-card"><span class="dashboard-icon">${c[2]}</span><strong>${c[1]}</strong><span>${c[0]}</span></div>`).join("");
+  const badge=document.getElementById("adminMessageBadge"); if(badge) badge.textContent=(unread.count||0)>0?String(unread.count):"";
 }
 
 /* =========================
@@ -997,78 +954,35 @@ async function loadAdminDropdowns() {
 }
 
 async function addMentor() {
-  const name = document.getElementById("newMentorName")?.value.trim() || "";
-  const type = document.getElementById("newMentorType")?.value || "";
-  const location = document.getElementById("newMentorLocation")?.value.trim() || "";
-  const email = document.getElementById("newMentorEmail")?.value.trim() || "";
-
-  if (!name || !email || !type || !location) {
-  alert("Please fill all mentor fields");
-  return;
-  }
-
-  const { error } = await db
-    .from("mentors")
-    .insert([{ name, email, type, location }]);
-
-  if (error) {
-    console.error(error);
-    alert("Error adding mentor");
-    return;
-  }
-
-  const { data: existingLocation } = await db
-    .from("locations")
-    .select("*")
-    .eq("name", location)
-    .limit(1);
-
-  if (!existingLocation || existingLocation.length === 0) {
-    await db.from("locations").insert([{ name: location }]);
-  }
-
-  renderAdminMentors();
-  renderAdminLocations();
-  loadAdminDropdowns();
-  loadDashboard();
-  loadSearchFilters();
-
-  document.getElementById("newMentorName").value = "";
-  document.getElementById("newMentorType").value = "";
-  document.getElementById("newMentorLocation").value = "";
-  document.getElementById("newMentorEmail").value = "";
+  const artistName=document.getElementById("newMentorArtistName")?.value.trim()||"";
+  const email=document.getElementById("newMentorEmail")?.value.trim()||"";
+  const legalName=document.getElementById("newMentorName")?.value.trim()||"";
+  const phone=document.getElementById("newMentorPhone")?.value.trim()||"";
+  const type=document.getElementById("newMentorType")?.value||"";
+  const location=document.getElementById("newMentorLocation")?.value.trim()||"";
+  const notes=document.getElementById("newMentorAdminNotes")?.value.trim()||"";
+  const dbs=!!document.getElementById("newMentorDbsChecked")?.checked;
+  if(!artistName||!email) return alert("Artist Name and Email are required");
+  const systemName=artistName;
+  const {error}=await db.from("mentors").insert([{name:systemName,artist_name:artistName,email,phone:phone||null,type:type||null,location:location||null,admin_notes:notes||null,dbs_checked:dbs,legal_name:legalName||null}]);
+  if(error){console.error(error);return alert("Error adding mentor: "+error.message)}
+  ["newMentorName","newMentorArtistName","newMentorEmail","newMentorPhone","newMentorAdminNotes"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});
+  if(document.getElementById("newMentorType"))document.getElementById("newMentorType").value="";
+  if(document.getElementById("newMentorLocation"))document.getElementById("newMentorLocation").value="";
+  if(document.getElementById("newMentorDbsChecked"))document.getElementById("newMentorDbsChecked").checked=false;
+  await renderAdminMentors(); await loadAdminDropdowns(); await loadDashboard();
 }
 
+let adminMentorsCache=[];
 async function renderAdminMentors() {
-  const container = document.getElementById("adminMentors");
-  if (!container) return;
-
-  const { data, error } = await db
-    .from("mentors")
-    .select("*")
-    .order("type", { ascending: true })
-    .order("name", { ascending: true });
-
-  if (error) {
-    console.error(error);
-    container.innerHTML = "<p>Error loading mentors.</p>";
-    return;
-  }
-
-  let html = "";
-
-  (data || []).forEach(mentor => {
-    html += `
-      <div class="slot-card">
-        <p><strong>${mentor.name}</strong></p>
-        <p>${mentor.type}</p>
-        <p>${mentor.location}</p>
-        <button onclick="removeMentor('${mentor.id}')">REMOVE MENTOR</button>
-      </div>
-    `;
-  });
-
-  container.innerHTML = html || "<p>No mentors added yet.</p>";
+ const container=document.getElementById("adminMentors"); if(!container)return;
+ const {data,error}=await db.from("mentors").select("*").order("artist_name",{ascending:true});
+ if(error){container.innerHTML="<p>Error loading mentors.</p>";return;} adminMentorsCache=data||[]; filterAdminMentors();
+}
+function filterAdminMentors(){
+ const c=document.getElementById("adminMentors");if(!c)return; const q=(document.getElementById("mentorAdminSearch")?.value||"").toLowerCase();
+ const rows=adminMentorsCache.filter(m=>[m.artist_name,m.legal_name,m.name,m.email,m.phone].some(v=>String(v||"").toLowerCase().includes(q)));
+ c.innerHTML=rows.map(m=>`<div class="slot-card"><p><strong>${escapeHtml(m.artist_name||m.name)}</strong></p>${m.legal_name?`<p>Name: ${escapeHtml(m.legal_name)}</p>`:""}<p>${escapeHtml(m.email||"")}</p>${m.phone?`<p>${escapeHtml(m.phone)}</p>`:""}${m.type?`<p>${escapeHtml(m.type)}</p>`:""}${m.location?`<p>${escapeHtml(m.location)}</p>`:""}<button onclick="removeMentor('${m.id}')">REMOVE MENTOR</button></div>`).join("")||"<p>No mentors found.</p>";
 }
 
 async function removeMentor(id) {
@@ -1857,95 +1771,18 @@ function messageDateTime(value) {
   });
 }
 
-async function renderMentorMessages() {
-  const container = document.getElementById("mentorMessages");
-  const mentorName = getLoggedInMentorName();
-  if (!container || !mentorName) return;
-
-  await cleanupExpiredMessages();
-
-  const { data, error } = await db
-    .from("messages")
-    .select("*")
-    .eq("mentor", mentorName)
-    .order("created_at", { ascending: false });
-
-  if (error) {
-    console.error(error);
-    container.innerHTML = "<p>Unable to load messages.</p>";
-    return;
-  }
-
-  const messages = data || [];
-  const bookingIds = [...new Set(messages.map(m => m.booking_id).filter(Boolean))];
-  const bookingMap = {};
-  if (bookingIds.length) {
-    const { data: bookings } = await db.from("bookings")
-      .select("id,date,time,child,parent,type,location")
-      .in("id", bookingIds);
-    (bookings || []).forEach(b => { bookingMap[b.id] = b; });
-  }
-
-  const visible = messages.filter(m =>
-    m.thread_type === "booking" || m.thread_type === "mentor_admin" || m.thread_type === "admin_mentor" || m.thread_type === "broadcast"
-  );
-
-  container.innerHTML = `
-    <div class="message-safety-note">Messages are kept for 14 days.</div>
-    <div class="message-compose-card">
-      <h3>Message Admin</h3>
-      <textarea id="mentorAdminMessage" class="mentor-textarea" placeholder="Type your message to admin"></textarea>
-      <button onclick="sendMentorAdminMessage()">SEND TO ADMIN</button>
-    </div>
-    ${visible.map(message => {
-      const booking = message.booking_id ? bookingMap[message.booking_id] : null;
-      const isForMentor = message.recipient === "mentor" || message.recipient === "both";
-      const sessionLine = booking
-        ? `<p class="message-session-line"><strong>📅 ${formatDisplayDate(booking.date)} at ${escapeHtml(booking.time || "")}</strong></p>`
-        : "";
-      const canReply = message.thread_type === "booking" && booking && isForMentor;
-      const adminReply = (message.thread_type === "mentor_admin" || message.thread_type === "admin_mentor") && isForMentor;
-      return `
-        <div class="slot-card ${(!message.is_read && isForMentor) ? "unread-card" : ""}">
-          <p><strong>${escapeHtml(booking?.child || (message.thread_type === "broadcast" ? "Admin announcement" : "Message"))}</strong></p>
-          ${sessionLine}
-          <p>From: ${escapeHtml(message.sender_name || (message.sender_role === "admin" ? "Admin" : "Parent"))}</p>
-          <p>${escapeHtml(message.message || "")}</p>
-          <p class="small-muted">${messageDateTime(message.created_at)}</p>
-          ${canReply ? `<textarea id="reply-${message.id}" class="mentor-textarea" placeholder="Reply to parent"></textarea><button onclick="replyToMentorMessage('${message.id}', '${message.booking_id}')">REPLY TO PARENT</button>` : ""}
-          ${adminReply ? `<textarea id="admin-reply-${message.id}" class="mentor-textarea" placeholder="Reply to admin"></textarea><button onclick="replyMentorToAdmin('${message.id}')">REPLY TO ADMIN</button>` : ""}
-        </div>`;
-    }).join("") || "<p>No messages yet.</p>"}
-  `;
-
-  const ids = visible.filter(m => !m.is_read && (m.recipient === "mentor" || m.recipient === "both")).map(m => m.id);
-  if (ids.length) await db.from("messages").update({ is_read: true }).in("id", ids);
+async function renderMentorMessages(){
+ const c=document.getElementById("mentorMessages"), mentor=getLoggedInMentorName(); if(!c||!mentor)return; await cleanupExpiredMessages();
+ const {data,error}=await db.from("messages").select("*").eq("mentor",mentor).order("created_at",{ascending:true}); if(error){c.innerHTML="<p>Unable to load messages.</p>";return;}
+ const msgs=data||[], groups={}; msgs.forEach(m=>{let key=m.thread_type==="booking"?`booking:${m.booking_id}`:"admin";(groups[key]??=[]).push(m)});
+ let bookingMap={}; const ids=[...new Set(msgs.map(m=>m.booking_id).filter(Boolean))]; if(ids.length){const {data:b}=await db.from("bookings").select("*").in("id",ids);(b||[]).forEach(x=>bookingMap[x.id]=x)}
+ c.innerHTML=`<div class="message-safety-note">Messages are kept for 14 days.</div><div class="message-compose-card"><h3>Message Admin</h3><textarea id="mentorAdminMessage" class="mentor-textarea" placeholder="Type your message to admin"></textarea><button onclick="sendMentorAdminMessage()">SEND TO ADMIN</button></div>`+Object.entries(groups).map(([key,arr])=>{
+   const b=key.startsWith('booking:')?bookingMap[arr[0].booking_id]:null; const title=b?`${escapeHtml(b.parent||b.child||'Parent')} — ${formatDisplayDate(b.date)} at ${escapeHtml(b.time||'')}`:'Admin';
+   return `<div class="chat-thread"><h3>${title}</h3>${b?`<p class="small-muted">${escapeHtml(b.type||'')} • ${escapeHtml(b.location||'')}</p>`:''}<div class="chat-list">${arr.map(m=>`<div class="chat-bubble ${m.sender_role==='mentor'?'chat-mine':'chat-other'}"><strong>${escapeHtml(m.sender_name||m.sender_role)}</strong><p>${escapeHtml(m.message||'')}</p><span>${messageDateTime(m.created_at)}</span></div>`).join('')}</div>${b?`<textarea id="threadReply-${b.id}" class="mentor-textarea" placeholder="Reply to parent"></textarea><button onclick="replyMentorThread('${b.id}')">SEND REPLY</button>`:''}</div>`;
+ }).join('');
+ const unread=msgs.filter(m=>!m.is_read&&(m.recipient==='mentor'||m.recipient==='both')).map(m=>m.id); if(unread.length)await db.from("messages").update({is_read:true}).in("id",unread);
 }
-
-async function replyToMentorMessage(messageId, bookingId) {
-  const input = document.getElementById(`reply-${messageId}`);
-  const text = input?.value.trim() || "";
-  if (!text) return alert("Please write a reply");
-
-  const { data: row } = await db.from("messages").select("*").eq("id", messageId).single();
-  if (!row) return;
-
-  const { error } = await db.from("messages").insert([{
-    booking_id: bookingId,
-    mentor: getLoggedInMentorName(),
-    child_name: row.child_name,
-    parent_email: row.parent_email,
-    sender_name: getLoggedInMentorName(),
-    sender_role: "mentor",
-    recipient: "parent",
-    thread_type: "booking",
-    message: text,
-    is_read: false
-  }]);
-  if (error) return alert("Error sending reply");
-  input.value = "";
-  await renderMentorMessages();
-}
+async function replyMentorThread(bookingId){const input=document.getElementById(`threadReply-${bookingId}`),text=input?.value.trim()||'';if(!text)return;const {data:b}=await db.from('bookings').select('*').eq('id',bookingId).single();if(!b)return;const mentor=getLoggedInMentorName();const {error}=await db.from('messages').insert([{booking_id:bookingId,mentor,child_name:b.child,parent_email:b.email,sender_name:mentor,sender_role:'mentor',recipient:'parent',thread_type:'booking',message:text,is_read:false}]);if(error)return alert('Error sending reply: '+error.message);input.value='';await renderMentorMessages();}
 
 async function sendMentorAdminMessage() {
   const input = document.getElementById("mentorAdminMessage");
@@ -2164,35 +2001,12 @@ async function renderMentorExpenses() {
 let membersCache = [];
 
 async function addMember() {
-  const name = document.getElementById("memberName")?.value.trim() || "";
-  const djMcName = document.getElementById("memberDjMcName")?.value.trim() || "";
-  const type = document.getElementById("memberType")?.value || "";
-
-  if (!name || !type) {
-    alert("Please enter the member name and select a type");
-    return;
-  }
-
-  const { error } = await db
-    .from("members")
-    .insert([{
-      name,
-      dj_mc_name: djMcName || null,
-      type
-    }]);
-
-  if (error) {
-    console.error("Error adding member:", error);
-    alert("Error adding member");
-    return;
-  }
-
-  document.getElementById("memberName").value = "";
-  document.getElementById("memberDjMcName").value = "";
-  document.getElementById("memberType").value = "";
-
-  await renderMembers();
-  await loadDashboard();
+ const name=document.getElementById("memberName")?.value.trim()||""; const type=document.getElementById("memberType")?.value||"";
+ if(!name||!type)return alert("Please enter the member name and select a type");
+ const prefs=[...document.querySelectorAll('input[name="memberContactPref"]:checked')].map(x=>x.value);
+ const row={name,dj_mc_name:document.getElementById("memberDjMcName")?.value.trim()||null,type,parent_guardian_name:document.getElementById("memberParentGuardian")?.value.trim()||null,email:document.getElementById("memberEmail")?.value.trim()||null,phone:document.getElementById("memberPhone")?.value.trim()||null,preferred_contact:prefs.join(",")||null,mailing_consent:!!document.getElementById("memberMailingConsent")?.checked};
+ const {error}=await db.from("members").insert([row]); if(error){console.error(error);return alert("Error adding member: "+error.message)}
+ document.querySelectorAll('#addMemberSection input').forEach(x=>{if(x.type==='checkbox')x.checked=false;else x.value=''}); document.getElementById("memberType").value=""; await renderMembers();await loadDashboard();
 }
 
 async function renderMembers() {
@@ -2458,28 +2272,13 @@ async function copyParentAdminChat() {
   try { await navigator.clipboard.writeText(text||"No messages"); alert("Chat copied"); } catch { alert("Unable to copy chat on this device"); }
 }
 
-async function renderAdminMessages() {
-  const container=document.getElementById("adminMessages");
-  if(!container) return;
-  await cleanupExpiredMessages();
-  const {data,error}=await db.from("messages").select("*").order("created_at",{ascending:false}).limit(200);
-  if(error) return container.innerHTML="<p>Unable to load messages.</p>";
-  const incoming=(data||[]).filter(m=>m.recipient==="admin");
-  container.innerHTML=`<div class="message-safety-note">Messages are automatically removed after 14 days.</div>${incoming.map(m=>`<div class="slot-card ${m.is_read?"":"unread-card"}"><p><strong>${escapeHtml(m.sender_name || (m.sender_role === "mentor" ? m.mentor : "Parent"))}</strong></p><p>${escapeHtml(m.message||"")}</p><p class="small-muted">${messageDateTime(m.created_at)}</p><textarea id="adminReply-${m.id}" class="mentor-textarea" placeholder="Reply"></textarea><button onclick="replyAdminMessage('${m.id}')">REPLY</button></div>`).join("")||"<p>No messages for admin.</p>"}`;
-  const ids=incoming.filter(m=>!m.is_read).map(m=>m.id); if(ids.length) await db.from("messages").update({is_read:true}).in("id",ids);
+async function renderAdminMessages(){
+ const c=document.getElementById("adminMessages");if(!c)return;await cleanupExpiredMessages();const {data,error}=await db.from("messages").select("*").order("created_at",{ascending:true});if(error){c.innerHTML="<p>Unable to load messages.</p>";return;}
+ const relevant=(data||[]).filter(m=>m.thread_type==='parent_admin'||m.thread_type==='mentor_admin'||m.thread_type==='admin_mentor');const groups={};relevant.forEach(m=>{const key=m.parent_email?`parent:${m.parent_email}`:`mentor:${m.mentor}`;(groups[key]??=[]).push(m)});
+ c.innerHTML=`<div class="message-safety-note">Messages are automatically removed after 14 days.</div>`+Object.entries(groups).map(([key,arr])=>{const last=arr[arr.length-1],label=key.startsWith('parent:')?(arr.find(x=>x.sender_role==='parent')?.sender_name||last.parent_email||'Parent'):(last.mentor||'Mentor');const unread=arr.some(x=>x.recipient==='admin'&&!x.is_read);return `<div class="chat-thread ${unread?'unread-card':''}"><h3>${escapeHtml(label)} ${unread?'<span class="unread-pill">UNREAD</span>':''}</h3><div class="chat-list">${arr.map(m=>`<div class="chat-bubble ${m.sender_role==='admin'?'chat-mine':'chat-other'}"><strong>${escapeHtml(m.sender_name||m.sender_role)}</strong><p>${escapeHtml(m.message||'')}</p><span>${messageDateTime(m.created_at)}</span></div>`).join('')}</div><textarea id="adminThread-${escapeHtml(last.id)}" class="mentor-textarea" placeholder="Reply"></textarea><button onclick="replyAdminThread('${last.id}')">SEND REPLY</button></div>`}).join('')||'<p>No messages for admin.</p>';
+ const unreadIds=relevant.filter(m=>m.recipient==='admin'&&!m.is_read).map(m=>m.id);if(unreadIds.length)await db.from('messages').update({is_read:true}).in('id',unreadIds);await loadDashboard();
 }
-
-async function replyAdminMessage(id) {
-  const input=document.getElementById(`adminReply-${id}`); const text=input?.value.trim()||""; if(!text) return alert("Please write a reply");
-  const {data:m}=await db.from("messages").select("*").eq("id",id).single(); if(!m) return;
-  const recipient=m.sender_role==="mentor"?"mentor":"parent";
-  const thread=m.sender_role==="mentor"?"admin_mentor":"parent_admin";
-  const {error}=await db.from("messages").insert([{
-    booking_id:m.booking_id||null, mentor:m.mentor||null, child_name:m.child_name||null, parent_email:m.parent_email||null,
-    sender_name:"Admin", sender_role:"admin", recipient, thread_type:thread, message:text, is_read:false
-  }]);
-  if(error) return alert("Error sending reply"); input.value=""; await renderAdminMessages();
-}
+async function replyAdminThread(id){const input=document.getElementById(`adminThread-${id}`),text=input?.value.trim()||'';if(!text)return;const {data:m}=await db.from('messages').select('*').eq('id',id).single();if(!m)return;const recipient=m.mentor&&!m.parent_email?'mentor':'parent';const {error}=await db.from('messages').insert([{booking_id:null,mentor:m.mentor||null,parent_email:m.parent_email||null,sender_name:'Admin',sender_role:'admin',recipient,thread_type:recipient==='mentor'?'admin_mentor':'parent_admin',message:text,is_read:false}]);if(error)return alert('Error sending reply: '+error.message);input.value='';await renderAdminMessages();}
 
 async function loadAdminMessageMentors() {
   const select=document.getElementById("adminMessageMentor"); if(!select) return;
@@ -2496,6 +2295,22 @@ async function sendAdminMentorMessage(sendAll=false) {
   const {error}=await db.from("messages").insert(rows); if(error) return alert("Error sending message");
   document.getElementById("adminMentorMessage").value=""; alert(sendAll?"Message sent to all mentors":"Message sent"); await renderAdminMessages();
 }
+
+/* =========================
+   FINAL ADMIN V2 HELPERS
+========================= */
+let adminExpenseFilter="Submitted";
+async function renderAdminExpenses(){const c=document.getElementById("adminExpenses");if(!c)return;let q=db.from("expenses").select("*").order("created_at",{ascending:false});const {data,error}=await q;if(error){c.innerHTML="<p>Unable to load expenses.</p>";return;}let rows=data||[];if(adminExpenseFilter==='Submitted')rows=rows.filter(x=>['Pending','Submitted'].includes(x.status));else if(adminExpenseFilter)rows=rows.filter(x=>x.status===adminExpenseFilter);c.innerHTML=rows.map(x=>`<div class="slot-card"><p><strong>${escapeHtml(x.mentor||'')}</strong> — ${formatDisplayDate(x.expense_date)}</p><p>${x.miles?`${x.miles} miles • `:''}<strong>£${Number(x.amount||0).toFixed(2)}</strong></p><p>${escapeHtml(x.reason||'')}</p>${x.receipt_url?`<a href="${escapeHtml(x.receipt_url)}" target="_blank">VIEW RECEIPT</a>`:''}<p>Status: <strong>${escapeHtml(x.status||'Submitted')}</strong></p>${['Pending','Submitted'].includes(x.status)?`<button onclick="setExpenseStatus('${x.id}','Approved')">APPROVE</button>`:''}${x.status==='Approved'?`<button onclick="setExpenseStatus('${x.id}','Paid')">MARK PAID</button>`:''}</div>`).join('')||'<p>No expenses in this view.</p>'}
+function setExpenseFilter(v){adminExpenseFilter=v;renderAdminExpenses()}
+async function setExpenseStatus(id,status){const {error}=await db.from('expenses').update({status}).eq('id',id);if(error)return alert(error.message);await renderAdminExpenses();await loadDashboard()}
+
+async function renderAdminNewsEvents(){const c=document.getElementById('adminNewsEvents');if(!c)return;const [{data:n},{data:e}]=await Promise.all([db.from('newsletters').select('*').order('created_at',{ascending:false}),db.from('events').select('*').order('event_date',{ascending:true})]);c.innerHTML=`<h3>Newsletters</h3>${(n||[]).map(x=>`<div class="slot-card"><strong>${escapeHtml(x.title)}</strong><p>${formatShortDate(x.published_date||x.published_at)}</p><a href="${escapeHtml(x.file_url)}" target="_blank">OPEN</a></div>`).join('')||'<p>No newsletters.</p>'}<h3>Upcoming Events</h3>${(e||[]).map(x=>`<div class="slot-card"><strong>${escapeHtml(x.title)}</strong><p>${formatDisplayDate(x.event_date)} ${escapeHtml(x.event_time||'')}</p><p>${escapeHtml(x.location||'')}</p><p>${escapeHtml(x.details||'')}</p></div>`).join('')||'<p>No upcoming events.</p>'}`}
+async function saveNewsletterFinal(){const title=document.getElementById('newsTitle').value.trim(),url=document.getElementById('newsUrl').value.trim(),date=document.getElementById('newsDate').value;if(!title||!url)return alert('Title and PDF/link are required');const {error}=await db.from('newsletters').insert([{title,file_url:url,published_date:date||new Date().toISOString().slice(0,10)}]);if(error)return alert(error.message);await renderAdminNewsEvents()}
+async function saveEvent(){const title=document.getElementById('eventTitle').value.trim(),date=document.getElementById('eventDate').value;if(!title||!date)return alert('Event title and date are required');const {error}=await db.from('events').insert([{title,event_date:date,event_time:document.getElementById('eventTime').value||null,location:document.getElementById('eventLocation').value.trim()||null,details:document.getElementById('eventDetails').value.trim()||null}]);if(error)return alert(error.message);await renderAdminNewsEvents()}
+
+async function renderMailingList(){const c=document.getElementById('adminMailingList');if(!c)return;const [{data:m},{data:b}]=await Promise.all([db.from('members').select('*').eq('mailing_consent',true),db.from('bookings').select('parent,email').not('email','is',null)]);const rows=[];(m||[]).forEach(x=>x.email&&rows.push({name:x.parent_guardian_name||x.name,email:x.email,source:'Member consent'}));const seen=new Set(rows.map(x=>x.email.toLowerCase()));(b||[]).forEach(x=>{if(x.email&&!seen.has(x.email.toLowerCase())){/* booking email is not marketing consent: intentionally excluded */}});c.innerHTML=rows.map(x=>`<div class="slot-card"><strong>${escapeHtml(x.name||'Parent')}</strong><p>${escapeHtml(x.email)}</p><span class="small-muted">${x.source}</span></div>`).join('')||'<p>No opted-in mailing contacts yet.</p>'}
+
+function printAdminList(kind){let html='';if(kind==='mentors')html=adminMentorsCache.map(x=>`<tr><td>${escapeHtml(x.artist_name||x.name)}</td><td>${escapeHtml(x.legal_name||'')}</td><td>${escapeHtml(x.email||'')}</td><td>${escapeHtml(x.phone||'')}</td></tr>`).join('');else html=membersCache.map(x=>`<tr><td>${escapeHtml(x.name||'')}</td><td>${escapeHtml(x.parent_guardian_name||'')}</td><td>${escapeHtml(x.email||'')}</td><td>${escapeHtml(x.phone||'')}</td></tr>`).join('');const w=window.open('','_blank');w.document.write(`<html><head><title>R4AR ${kind}</title></head><body><h1>Raving 4 A Reason — ${kind}</h1><table border="1" cellspacing="0" cellpadding="8" width="100%">${html}</table><script>window.onload=()=>window.print()<\/script></body></html>`);w.document.close()}
 
 /* =========================
    PAGE LOAD
@@ -2521,6 +2336,7 @@ window.onload = () => {
 
   if (memberSearch) memberSearch.addEventListener("input", filterMembers);
   if (memberTypeFilter) memberTypeFilter.addEventListener("change", filterMembers);
+  const mentorSearch=document.getElementById("mentorAdminSearch"); if(mentorSearch) mentorSearch.addEventListener("input",filterAdminMentors);
 
   const phoneInput = document.getElementById("parentPhone");
 
