@@ -55,16 +55,10 @@ function goToBooking() {
   window.location.href = "book.html";
 }
 
-function loginParent() {
-  const username = (document.getElementById("parentUsername")?.value || "").trim();
-  const password = document.getElementById("parentPassword")?.value || "";
-
-  if (username === PARENT_USERNAME && password === PARENT_PASSWORD) {
-    localStorage.setItem("parentLoggedIn", "true");
-    showParentMenu();
-  } else {
-    alert("Wrong parent password");
-  }
+async function loginParent() {
+  const username=(document.getElementById("parentUsername")?.value||"").trim();
+  const password=document.getElementById("parentPassword")?.value||"";
+  try { const r=await fetch("/.netlify/functions/verify-portal-login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({portal:"parent",username,password})}); const x=await r.json(); if(x.ok){localStorage.setItem("parentLoggedIn","true");showParentMenu();}else alert("Wrong parent password"); } catch(e){ alert("Unable to check login"); }
 }
 
 function logoutParent() {
@@ -138,20 +132,25 @@ function toggleSection(sectionId) {
       : "none";
 }
 
+function r4arConfirm(title, details) {
+  return new Promise(resolve => {
+    let modal=document.getElementById("r4arConfirmModal");
+    if(!modal){ modal=document.createElement("div"); modal.id="r4arConfirmModal"; modal.className="confirm-modal"; document.body.appendChild(modal); }
+    modal.innerHTML=`<div class="confirm-card"><h2>${escapeHtml(title)}</h2><div class="confirm-details">${details}</div><div class="confirm-actions"><button id="r4arConfirmYes">CONFIRM</button><button id="r4arConfirmNo" class="secondary">GO BACK</button></div></div>`;
+    modal.classList.add("open");
+    document.getElementById("r4arConfirmYes").onclick=()=>{modal.classList.remove("open");resolve(true)};
+    document.getElementById("r4arConfirmNo").onclick=()=>{modal.classList.remove("open");resolve(false)};
+  });
+}
+
 /* =========================
    ADMIN LOGIN
 ========================= */
 
-function loginAdmin() {
-  const username = document.getElementById("adminUsername")?.value || "";
-  const password = document.getElementById("adminPassword")?.value || "";
-
-  if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
-    localStorage.setItem("adminLoggedIn", "true");
-    showAdminPanel();
-  } else {
-    alert("Wrong username or password");
-  }
+async function loginAdmin() {
+  const username=(document.getElementById("adminUsername")?.value||"").trim();
+  const password=document.getElementById("adminPassword")?.value||"";
+  try { const r=await fetch("/.netlify/functions/verify-portal-login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({portal:"admin",username,password})}); const x=await r.json(); if(x.ok){localStorage.setItem("adminLoggedIn","true");showAdminPanel();}else alert("Wrong username/email or password"); } catch(e){ alert("Unable to check login"); }
 }
 
 function logoutAdmin() {
@@ -334,7 +333,8 @@ async function loadDashboard() {
     ["Available Sessions",sessions.count||0,"📅"],["Booked Sessions",bookings.count||0,"📝"],
     ["Unread Messages",unread.count||0,"✉️"],["Submitted Expenses",expenses.count||0,"💷"]
   ];
-  container.innerHTML=cards.map(c=>`<div class="dashboard-card"><span class="dashboard-icon">${c[2]}</span><strong>${c[1]}</strong><span>${c[0]}</span></div>`).join("");
+  const links={"Members":"admin-members.html","Mentors":"admin-mentors.html","Available Sessions":"admin-sessions.html","Booked Sessions":"admin-sessions.html#booked","Unread Messages":"admin-messages.html","Submitted Expenses":"admin-expenses.html"};
+  container.innerHTML=cards.map(c=>`<button type="button" class="dashboard-card dashboard-link" onclick="location.href='${links[c[0]]}'"><span class="dashboard-icon">${c[2]}</span><strong>${c[1]}</strong><span>${c[0]}</span></button>`).join("");
   const badge=document.getElementById("adminMessageBadge"); if(badge) badge.textContent=(unread.count||0)>0?String(unread.count):"";
 }
 
@@ -481,6 +481,9 @@ async function addSlot() {
     alert("Please fill all fields");
     return;
   }
+
+  const ok = await r4arConfirm("Confirm session", `<p><strong>${escapeHtml(mentor)}</strong> — ${escapeHtml(type)}</p><p>📅 ${formatDisplayDate(date)}</p><p>🕒 ${escapeHtml(time)}</p><p>📍 ${escapeHtml(location)}</p>`);
+  if (!ok) return;
 
   const { error } = await db
     .from("sessions")
@@ -731,6 +734,9 @@ async function confirmBooking() {
     alert("Please enter a valid phone number");
     return;
   }
+
+  const ok = await r4arConfirm("Confirm booking", `<p><strong>${escapeHtml(booking.child)}</strong></p><p>${escapeHtml(booking.mentor)} — ${escapeHtml(booking.type)}</p><p>📅 ${escapeHtml(booking.date)}</p><p>🕒 ${escapeHtml(booking.time)}</p><p>📍 ${escapeHtml(booking.location)}</p>`);
+  if (!ok) return;
 
   const chatToken = (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`) + "-" + Math.random().toString(36).slice(2);
 
@@ -1122,6 +1128,7 @@ async function renderBookedSessions() {
           Studio Booked / Paid
         </label>
 
+        <div class="card-actions"><button onclick="adminMessageBookingMentor('${booking.id}')" class="secondary">MESSAGE MENTOR</button><button onclick="adminMessageBookingParent('${booking.id}')" class="secondary">MESSAGE PARENT</button><button onclick="adminWhatsAppBookingParent('${booking.id}')" class="secondary">WHATSAPP PARENT</button><button onclick="adminSmsBookingParent('${booking.id}')" class="secondary">TEXT PARENT</button></div>
         <button onclick="removeBookedSession('${booking.id}')">REMOVE BOOKING</button>
       </div>
     `;
@@ -1621,6 +1628,8 @@ async function addMentorAvailability() {
     return;
   }
 
+  const ok = await r4arConfirm("Confirm availability", `<p><strong>${escapeHtml(mentorName)}</strong> — ${escapeHtml(type)}</p><p>📅 ${formatDisplayDate(date)}</p><p>🕒 ${newTimes.map(escapeHtml).join(", ")}</p><p>📍 ${escapeHtml(location)}</p>`);
+  if (!ok) return;
   const rows = newTimes.map(time => ({ date, type, mentor: mentorName, location, time }));
   const { error } = await db.from("sessions").insert(rows);
 
@@ -1630,7 +1639,7 @@ async function addMentorAvailability() {
     return;
   }
 
-  alert(`✅ ${newTimes.length} session${newTimes.length === 1 ? "" : "s"} added:\n${newTimes.join(", ")}`);
+  alert(`✅ Added ${newTimes.length} session${newTimes.length === 1 ? "" : "s"}\n${formatDisplayDate(date)}\n${location}\n${newTimes.join(", ")}`);
   clearSelectedMentorTimes();
 
   await Promise.all([
@@ -1778,7 +1787,7 @@ async function renderMentorMessages(){
  let bookingMap={}; const ids=[...new Set(msgs.map(m=>m.booking_id).filter(Boolean))]; if(ids.length){const {data:b}=await db.from("bookings").select("*").in("id",ids);(b||[]).forEach(x=>bookingMap[x.id]=x)}
  c.innerHTML=`<div class="message-safety-note">Messages are kept for 14 days.</div><div class="message-compose-card"><h3>Message Admin</h3><textarea id="mentorAdminMessage" class="mentor-textarea" placeholder="Type your message to admin"></textarea><button onclick="sendMentorAdminMessage()">SEND TO ADMIN</button></div>`+Object.entries(groups).map(([key,arr])=>{
    const b=key.startsWith('booking:')?bookingMap[arr[0].booking_id]:null; const title=b?`${escapeHtml(b.parent||b.child||'Parent')} — ${formatDisplayDate(b.date)} at ${escapeHtml(b.time||'')}`:'Admin';
-   return `<div class="chat-thread"><h3>${title}</h3>${b?`<p class="small-muted">${escapeHtml(b.type||'')} • ${escapeHtml(b.location||'')}</p>`:''}<div class="chat-list">${arr.map(m=>`<div class="chat-bubble ${m.sender_role==='mentor'?'chat-mine':'chat-other'}"><strong>${escapeHtml(m.sender_name||m.sender_role)}</strong><p>${escapeHtml(m.message||'')}</p><span>${messageDateTime(m.created_at)}</span></div>`).join('')}</div>${b?`<textarea id="threadReply-${b.id}" class="mentor-textarea" placeholder="Reply to parent"></textarea><button onclick="replyMentorThread('${b.id}')">SEND REPLY</button>`:''}</div>`;
+   return `<div class="chat-thread"><h3>${title}</h3>${b?`<p class="small-muted">${escapeHtml(b.type||'')} • ${escapeHtml(b.location||'')}</p>`:''}<div class="chat-list">${arr.map(m=>`<div class="chat-bubble ${m.sender_role==='mentor'?'chat-mine':'chat-other'}"><strong>${escapeHtml(m.sender_name||m.sender_role)}</strong><p>${escapeHtml(m.message||'')}</p><span>${messageDateTime(m.created_at)}</span></div>`).join('')}</div>${b?`<textarea id="threadReply-${b.id}" class="mentor-textarea" placeholder="Reply to parent"></textarea><button onclick="replyMentorThread('${b.id}')">SEND REPLY</button><button class="secondary danger-btn" onclick="deleteMessageThread('booking','${b.id}')">DELETE CHAT</button>`:`<button class="secondary danger-btn" onclick="deleteMessageThread('mentor','${mentor}')">DELETE CHAT</button>`}</div>`;
  }).join('');
  const unread=msgs.filter(m=>!m.is_read&&(m.recipient==='mentor'||m.recipient==='both')).map(m=>m.id); if(unread.length)await db.from("messages").update({is_read:true}).in("id",unread);
 }
@@ -2224,7 +2233,7 @@ async function renderParentAdminChat() {
     .eq("parent_email", currentParentAdminIdentity.email)
     .order("created_at", {ascending:true});
   if (error) return container.innerHTML="<p>Unable to load messages.</p>";
-  container.innerHTML=(data||[]).map(m=>`<div class="chat-bubble ${m.sender_role === "parent" ? "chat-parent" : "chat-other"}"><strong>${escapeHtml(m.sender_name || m.sender_role)}</strong><p>${escapeHtml(m.message)}</p><span>${messageDateTime(m.created_at)}</span></div>`).join("") || "<p>No messages yet.</p>";
+  container.innerHTML=((data||[]).map(m=>`<div class="chat-bubble ${m.sender_role === "parent" ? "chat-parent" : "chat-other"}"><strong>${escapeHtml(m.sender_name || m.sender_role)}</strong><p>${escapeHtml(m.message)}</p><span>${messageDateTime(m.created_at)}</span></div>`).join("") || "<p>No messages yet.</p>") + ((data||[]).length ? `<button class="secondary danger-btn" onclick="deleteMessageThread(\'parent\',\'${currentParentAdminIdentity.email}\')">DELETE CHAT</button>` : "");
   const ids=(data||[]).filter(m=>m.recipient==="parent"&&!m.is_read).map(m=>m.id);
   if(ids.length) await db.from("messages").update({is_read:true}).in("id",ids);
 }
@@ -2275,7 +2284,7 @@ async function copyParentAdminChat() {
 async function renderAdminMessages(){
  const c=document.getElementById("adminMessages");if(!c)return;await cleanupExpiredMessages();const {data,error}=await db.from("messages").select("*").order("created_at",{ascending:true});if(error){c.innerHTML="<p>Unable to load messages.</p>";return;}
  const relevant=(data||[]).filter(m=>m.thread_type==='parent_admin'||m.thread_type==='mentor_admin'||m.thread_type==='admin_mentor');const groups={};relevant.forEach(m=>{const key=m.parent_email?`parent:${m.parent_email}`:`mentor:${m.mentor}`;(groups[key]??=[]).push(m)});
- c.innerHTML=`<div class="message-safety-note">Messages are automatically removed after 14 days.</div>`+Object.entries(groups).map(([key,arr])=>{const last=arr[arr.length-1],label=key.startsWith('parent:')?(arr.find(x=>x.sender_role==='parent')?.sender_name||last.parent_email||'Parent'):(last.mentor||'Mentor');const unread=arr.some(x=>x.recipient==='admin'&&!x.is_read);return `<div class="chat-thread ${unread?'unread-card':''}"><h3>${escapeHtml(label)} ${unread?'<span class="unread-pill">UNREAD</span>':''}</h3><div class="chat-list">${arr.map(m=>`<div class="chat-bubble ${m.sender_role==='admin'?'chat-mine':'chat-other'}"><strong>${escapeHtml(m.sender_name||m.sender_role)}</strong><p>${escapeHtml(m.message||'')}</p><span>${messageDateTime(m.created_at)}</span></div>`).join('')}</div><textarea id="adminThread-${escapeHtml(last.id)}" class="mentor-textarea" placeholder="Reply"></textarea><button onclick="replyAdminThread('${last.id}')">SEND REPLY</button></div>`}).join('')||'<p>No messages for admin.</p>';
+ c.innerHTML=`<div class="message-safety-note">Messages are automatically removed after 14 days.</div>`+Object.entries(groups).map(([key,arr])=>{const last=arr[arr.length-1],label=key.startsWith('parent:')?(arr.find(x=>x.sender_role==='parent')?.sender_name||last.parent_email||'Parent'):(last.mentor||'Mentor');const unread=arr.some(x=>x.recipient==='admin'&&!x.is_read);return `<div class="chat-thread ${unread?'unread-card':''}"><h3>${escapeHtml(label)} ${unread?'<span class="unread-pill">UNREAD</span>':''}</h3><div class="chat-list">${arr.map(m=>`<div class="chat-bubble ${m.sender_role==='admin'?'chat-mine':'chat-other'}"><strong>${escapeHtml(m.sender_name||m.sender_role)}</strong><p>${escapeHtml(m.message||'')}</p><span>${messageDateTime(m.created_at)}</span></div>`).join('')}</div><textarea id="adminThread-${escapeHtml(last.id)}" class="mentor-textarea" placeholder="Reply"></textarea><button onclick="replyAdminThread('${last.id}')">SEND REPLY</button><button class="secondary danger-btn" onclick="deleteMessageThread('${key.startsWith('parent:')?'parent':'mentor'}','${key.split(':').slice(1).join(':')}')">DELETE CHAT</button></div>`}).join('')||'<p>No messages for admin.</p>';
  const unreadIds=relevant.filter(m=>m.recipient==='admin'&&!m.is_read).map(m=>m.id);if(unreadIds.length)await db.from('messages').update({is_read:true}).in('id',unreadIds);await loadDashboard();
 }
 async function replyAdminThread(id){const input=document.getElementById(`adminThread-${id}`),text=input?.value.trim()||'';if(!text)return;const {data:m}=await db.from('messages').select('*').eq('id',id).single();if(!m)return;const recipient=m.mentor&&!m.parent_email?'mentor':'parent';const {error}=await db.from('messages').insert([{booking_id:null,mentor:m.mentor||null,parent_email:m.parent_email||null,sender_name:'Admin',sender_role:'admin',recipient,thread_type:recipient==='mentor'?'admin_mentor':'parent_admin',message:text,is_read:false}]);if(error)return alert('Error sending reply: '+error.message);input.value='';await renderAdminMessages();}
@@ -2346,3 +2355,56 @@ window.onload = () => {
     });
   }
 };
+
+
+/* ===== FINAL POLISH V3 ===== */
+async function deleteMessageThread(kind, value){
+ if(!await r4arConfirm('Delete chat','<p>This permanently deletes this conversation.</p>')) return;
+ let q=db.from('messages').delete();
+ if(kind==='booking') q=q.eq('booking_id',value); else if(kind==='parent') q=q.eq('parent_email',value).eq('thread_type','parent_admin'); else q=q.eq('mentor',value).in('thread_type',['mentor_admin','admin_mentor']);
+ const {error}=await q; if(error)return alert(error.message);
+ await Promise.all([renderAdminMessages(),renderMentorMessages(),renderParentAdminChat?.()]);
+}
+
+async function adminMessageBookingMentor(id){ const {data:b}=await db.from('bookings').select('*').eq('id',id).single(); if(!b)return; const text=prompt(`Message ${b.mentor}:`); if(!text)return; const {error}=await db.from('messages').insert([{booking_id:id,mentor:b.mentor,child_name:b.child,parent_email:b.email,sender_name:'Admin',sender_role:'admin',recipient:'mentor',thread_type:'admin_mentor',message:text,is_read:false}]); if(error)return alert(error.message); alert('Message sent to mentor'); }
+async function adminMessageBookingParent(id){ const {data:b}=await db.from('bookings').select('*').eq('id',id).single(); if(!b)return; const text=prompt(`Message ${b.parent}:`); if(!text)return; const {error}=await db.from('messages').insert([{booking_id:id,mentor:b.mentor,child_name:b.child,parent_email:b.email,sender_name:'Admin',sender_role:'admin',recipient:'parent',thread_type:'parent_admin',message:text,is_read:false}]); if(error)return alert(error.message); alert('Message sent to parent'); }
+
+function printSessionList(kind){ const source=kind==='booked'?document.getElementById('adminBookedSessions'):document.getElementById('adminSlots'); if(!source)return; const w=window.open('','_blank'); w.document.write(`<html><head><title>R4AR ${kind} sessions</title><style>body{font-family:Arial;padding:25px}.slot-card{border:1px solid #bbb;padding:12px;margin:10px 0}button,input,label,textarea{display:none}</style></head><body><h1>Raving 4 A Reason — ${kind==='booked'?'Booked':'Available'} Sessions</h1>${source.innerHTML}<script>window.onload=()=>window.print()<\\/script></body></html>`); w.document.close(); }
+
+async function saveParentMailingConsent(){ const name=document.getElementById('mailingParentName')?.value.trim()||''; const email=document.getElementById('mailingParentEmail')?.value.trim()||''; const consent=!!document.getElementById('mailingParentConsent')?.checked; if(!name||!email||!consent)return alert('Please enter your name, email and tick consent'); const {error}=await db.from('mailing_list').upsert([{name,email,consent:true}],{onConflict:'email'}); if(error)return alert(error.message); alert('Thank you — your mailing preference has been saved.'); }
+
+async function renderParentNewsEvents(){ const c=document.getElementById('parentNewsEvents'); if(!c)return; const [{data:n},{data:e}]=await Promise.all([db.from('newsletters').select('*').order('created_at',{ascending:false}).limit(3),db.from('events').select('*').gte('event_date',getTodayDate()).order('event_date')]); c.innerHTML=`<h2>Newsletters</h2>${(n||[]).map(x=>`<div class="slot-card">${x.image_url?`<img class="event-image" src="${escapeHtml(x.image_url)}" alt="">`:''}<strong>${escapeHtml(x.title)}</strong><p>${formatShortDate(x.published_date||x.published_at)}</p><a class="download-link" href="${escapeHtml(x.file_url)}" target="_blank">OPEN NEWSLETTER</a></div>`).join('')||'<p>No newsletters yet.</p>'}<h2>Upcoming Events</h2>${(e||[]).map(x=>`<div class="slot-card">${x.image_url?`<img class="event-image" src="${escapeHtml(x.image_url)}" alt="">`:''}<strong>${escapeHtml(x.title)}</strong><p>📅 ${formatDisplayDate(x.event_date)}</p><p>🕒 ${escapeHtml(x.start_time||'')} ${x.end_time?'– '+escapeHtml(x.end_time):''}</p><p>📍 ${escapeHtml(x.location||'')}</p>${x.age_restriction?`<p>Age: ${escapeHtml(x.age_restriction)}</p>`:''}${x.ticket_price?`<p>Tickets: ${escapeHtml(x.ticket_price)}</p>`:''}${x.ticket_url?`<a class="download-link" href="${escapeHtml(x.ticket_url)}" target="_blank">TICKETS / FACEBOOK</a>`:''}</div>`).join('')||'<p>No upcoming events.</p>'}`; }
+
+async function uploadPublicFile(inputId,bucket){ const file=document.getElementById(inputId)?.files?.[0]; if(!file)return null; const safe=file.name.replace(/[^a-zA-Z0-9._-]/g,'-'); const path=`${Date.now()}-${safe}`; const {error}=await db.storage.from(bucket).upload(path,file,{upsert:false}); if(error)throw error; return db.storage.from(bucket).getPublicUrl(path).data.publicUrl; }
+
+async function saveNewsletterV3(){ try{ const title=document.getElementById('newsTitle').value.trim(),date=document.getElementById('newsDate').value; let url=document.getElementById('newsUrl').value.trim(); const uploaded=await uploadPublicFile('newsFile','newsletters'); if(uploaded)url=uploaded; const image=await uploadPublicFile('newsImage','news-events'); if(!title||!url)return alert('Add a title and either upload a newsletter or enter a link'); const {error}=await db.from('newsletters').insert([{title,file_url:url,published_date:date||getTodayDate(),image_url:image}]); if(error)throw error; alert('Newsletter saved'); await renderAdminNewsEvents(); }catch(e){alert(e.message||'Unable to save newsletter')} }
+async function saveEventV3(){ try{ const title=document.getElementById('eventTitle').value.trim(),date=document.getElementById('eventDate').value; if(!title||!date)return alert('Event title and date are required'); const image=await uploadPublicFile('eventImage','news-events'); const row={title,event_date:date,start_time:document.getElementById('eventStartTime').value||null,end_time:document.getElementById('eventEndTime').value||null,location:document.getElementById('eventLocation').value.trim()||null,details:document.getElementById('eventDetails').value.trim()||null,age_restriction:document.getElementById('eventAge').value.trim()||null,ticket_price:document.getElementById('eventPrice').value.trim()||null,ticket_url:document.getElementById('eventTicketUrl').value.trim()||null,image_url:image}; const {error}=await db.from('events').insert([row]); if(error)throw error; alert('Event saved'); await renderAdminNewsEvents(); }catch(e){alert(e.message||'Unable to save event')} }
+
+async function renderMailingListV3(){ const c=document.getElementById('adminMailingList'); if(!c)return; const [{data:m},{data:l}]=await Promise.all([db.from('members').select('*').eq('mailing_consent',true),db.from('mailing_list').select('*').eq('consent',true)]); const rows=[...(m||[]).filter(x=>x.email).map(x=>({name:x.parent_guardian_name||x.name,email:x.email})),...(l||[])]; const uniq=[...new Map(rows.map(x=>[x.email.toLowerCase(),x])).values()]; c.innerHTML=uniq.map(x=>`<div class="slot-card"><strong>${escapeHtml(x.name||'Parent')}</strong><p>${escapeHtml(x.email)}</p></div>`).join('')||'<p>No opted-in mailing contacts yet.</p>'; }
+
+async function securityRequest(action,payload={}){ const r=await fetch('/.netlify/functions/security-settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,...payload})}); const data=await r.json().catch(()=>({})); if(!r.ok)throw new Error(data.error||'Security update failed'); return data; }
+async function saveParentPasswordSetting(){const v=document.getElementById('settingParentPassword').value;if(v.length<6)return alert('Use at least 6 characters');try{await securityRequest('set_parent_password',{password:v});alert('Parent portal password updated')}catch(e){alert(e.message)}}
+async function saveAdminPasswordSetting(){const v=document.getElementById('settingAdminPassword').value;if(v.length<8)return alert('Use at least 8 characters');try{await securityRequest('set_admin_password',{password:v});alert('Admin password updated')}catch(e){alert(e.message)}}
+async function saveAdminEmailSetting(){const v=document.getElementById('settingAdminEmail').value.trim();if(!v)return;try{await securityRequest('set_admin_email',{email:v});alert('Admin email updated')}catch(e){alert(e.message)}}
+async function resetMentorPasswordAdmin(){const mentor=document.getElementById('settingMentorSelect').value,password=document.getElementById('settingMentorPassword').value;if(!mentor||password.length<6)return alert('Choose a mentor and enter at least 6 characters');try{await securityRequest('reset_mentor_password',{mentor,password});alert('Mentor password reset')}catch(e){alert(e.message)}}
+async function loadSecurityMentors(){const s=document.getElementById('settingMentorSelect');if(!s)return;const {data}=await db.from('mentors').select('name,artist_name').order('name');s.innerHTML='<option value="">Select mentor</option>'+(data||[]).map(x=>`<option value="${escapeHtml(x.name)}">${escapeHtml(x.artist_name||x.name)}</option>`).join('')}
+
+async function renderAdminNewsEvents(){const c=document.getElementById('adminNewsEvents');if(!c)return;const [{data:n},{data:e}]=await Promise.all([db.from('newsletters').select('*').order('created_at',{ascending:false}),db.from('events').select('*').order('event_date',{ascending:true})]);c.innerHTML=`<h3>Newsletters</h3>${(n||[]).map(x=>`<div class="slot-card">${x.image_url?`<img class="event-image" src="${escapeHtml(x.image_url)}" alt="">`:''}<strong>${escapeHtml(x.title)}</strong><p>${formatShortDate(x.published_date||x.published_at)}</p><a href="${escapeHtml(x.file_url)}" target="_blank">OPEN</a></div>`).join('')||'<p>No newsletters.</p>'}<h3>Upcoming Events</h3>${(e||[]).map(x=>`<div class="slot-card">${x.image_url?`<img class="event-image" src="${escapeHtml(x.image_url)}" alt="">`:''}<strong>${escapeHtml(x.title)}</strong><p>${formatDisplayDate(x.event_date)}</p><p>${escapeHtml(x.start_time||x.event_time||'')} ${x.end_time?'– '+escapeHtml(x.end_time):''}</p><p>${escapeHtml(x.location||'')}</p>${x.age_restriction?`<p>Age: ${escapeHtml(x.age_restriction)}</p>`:''}${x.ticket_price?`<p>Tickets: ${escapeHtml(x.ticket_price)}</p>`:''}${x.ticket_url?`<a href="${escapeHtml(x.ticket_url)}" target="_blank">TICKETS / FACEBOOK</a>`:''}</div>`).join('')||'<p>No upcoming events.</p>'}`}
+
+async function initAdminSubpage(){
+ const page=document.body?.dataset?.adminPage;
+ const protectedBox=document.getElementById('adminProtectedPage');
+ if(page && localStorage.getItem('adminLoggedIn')!=='true'){ location.replace('admin.html'); return; }
+ if(protectedBox) protectedBox.style.display='block';
+ if(page==='sessions'){await loadAdminDropdowns();await renderAdminSlots();await renderBookedSessions();}
+ if(page==='locations'){await renderAdminLocations();}
+ if(page==='expenses'){await renderAdminExpenses();}
+ if(page==='members'){await renderMembers();}
+ if(page==='mentors'){await loadAdminDropdowns();await renderAdminMentors();}
+ if(page==='messages'){await loadAdminMessageMentors();await renderAdminMessages();}
+}
+setTimeout(initAdminSubpage,0);
+function filterAdminLocations(){const q=(document.getElementById('locationAdminSearch')?.value||'').toLowerCase();document.querySelectorAll('#adminLocations .slot-card').forEach(card=>card.style.display=card.textContent.toLowerCase().includes(q)?'block':'none')}
+
+async function adminWhatsAppBookingParent(id){const {data:b}=await db.from('bookings').select('*').eq('id',id).single();if(!b?.phone)return alert('No parent phone number');const phone=String(b.phone).replace(/\D/g,'').replace(/^0/,'44');const text=encodeURIComponent(`Raving 4 A Reason booking: ${b.child} — ${formatDisplayDate(b.date)} at ${b.time}, ${b.location}, with ${b.mentor}.`);window.open(`https://wa.me/${phone}?text=${text}`,'_blank')}
+async function adminSmsBookingParent(id){const {data:b}=await db.from('bookings').select('*').eq('id',id).single();if(!b?.phone)return alert('No parent phone number');const text=encodeURIComponent(`Raving 4 A Reason booking: ${b.child} — ${formatDisplayDate(b.date)} at ${b.time}, ${b.location}, with ${b.mentor}.`);location.href=`sms:${b.phone}?body=${text}`}
