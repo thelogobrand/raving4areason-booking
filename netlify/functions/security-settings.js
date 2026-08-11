@@ -1,0 +1,10 @@
+const crypto=require('crypto');
+const URL='https://ejizwiegnxtwglihrxiz.supabase.co';
+const hash=v=>crypto.createHash('sha256').update(String(v)).digest('hex');
+const headers=key=>({apikey:key,Authorization:`Bearer ${key}`,'Content-Type':'application/json',Prefer:'resolution=merge-duplicates'});
+exports.handler=async event=>{try{if(event.httpMethod!=='POST')return{statusCode:405,body:'{}'};const key=process.env.SUPABASE_SERVICE_ROLE_KEY;if(!key)return{statusCode:500,body:JSON.stringify({error:'SUPABASE_SERVICE_ROLE_KEY missing'})};const b=JSON.parse(event.body||'{}');let endpoint='secure_settings?on_conflict=setting_key',payload;
+if(b.action==='set_parent_password')payload={setting_key:'parent_password_hash',setting_value:hash(b.password),updated_at:new Date().toISOString()};
+else if(b.action==='set_admin_password')payload={setting_key:'admin_password_hash',setting_value:hash(b.password),updated_at:new Date().toISOString()};
+else if(b.action==='set_admin_email')payload={setting_key:'admin_email',setting_value:String(b.email||'').trim().toLowerCase(),updated_at:new Date().toISOString()};
+else if(b.action==='reset_mentor_password'){endpoint=`mentors?name=eq.${encodeURIComponent(b.mentor)}`;payload={password_hash:hash(b.password)};}else return{statusCode:400,body:JSON.stringify({error:'Unknown action'})};
+const r=await fetch(`${URL}/rest/v1/${endpoint}`,{method:b.action==='reset_mentor_password'?'PATCH':'POST',headers:headers(key),body:JSON.stringify(payload)});if(!r.ok)throw new Error(await r.text());return{statusCode:200,body:JSON.stringify({ok:true})};}catch(e){return{statusCode:500,body:JSON.stringify({error:e.message||'Update failed'})}}};
