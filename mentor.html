@@ -24,10 +24,16 @@
 
     <div id="mentorPanel" style="display:none;">
       <div class="mentor-hero">
-        <button id="mentorAvatarButton" class="mentor-avatar-button" type="button" onclick="openMentorProfile()" aria-label="Open profile">
-          <img id="mentorAvatarImage" class="mentor-avatar-image" alt="Mentor profile">
-          <span id="mentorAvatarInitials" class="mentor-avatar-initials">M</span>
-        </button>
+        <div class="mentor-hero-actions">
+          <button id="mentorAvatarButton" class="mentor-avatar-button" type="button" onclick="openMentorProfile()" aria-label="Open profile">
+            <img id="mentorAvatarImage" class="mentor-avatar-image" alt="Mentor profile">
+            <span id="mentorAvatarInitials" class="mentor-avatar-initials">M</span>
+          </button>
+          <a href="mentor-messages.html" class="mentor-envelope-button" aria-label="Open messages">
+            <span aria-hidden="true">✉️</span>
+            <span id="mentorMessageBadge" class="mentor-message-badge"></span>
+          </a>
+        </div>
         <p id="mentorToday" class="mentor-date"></p>
         <h1 id="mentorWelcome">Welcome 👋</h1>
         <p class="mentor-summary-intro">You currently have:</p>
@@ -69,12 +75,6 @@
       <section id="mentorBookedSection" class="mentor-section" style="display:none;">
         <div id="mentorBookedSessions"></div>
       </section>
-
-      <a href="mentor-messages.html" class="mentor-message-link" aria-label="Open messages">
-        <span class="mentor-message-envelope">✉️</span>
-        <span>MESSAGES</span>
-        <span id="mentorMessageBadge" class="mentor-message-badge"></span>
-      </a>
 
       <button onclick="toggleSection('mentorNewsletterSection')" class="mentor-menu-btn">📰 NEWS &amp; EVENTS</button>
       <section id="mentorNewsletterSection" class="mentor-section" style="display:none;">

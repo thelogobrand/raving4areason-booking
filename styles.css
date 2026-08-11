@@ -800,3 +800,6 @@ input[type="file"] { padding:9px; }
   text-align:center;
 }
 .mentor-message-badge:not(:empty){display:block}
+
+/* ===== PARENT + MENTOR FINAL CORRECTION ===== */
+.mentor-hero-actions{display:flex;align-items:center;justify-content:center;gap:18px;margin:0 auto 14px}.mentor-hero-actions .mentor-avatar-button{margin:0!important}.mentor-envelope-button{position:relative;width:58px;height:58px;display:flex;align-items:center;justify-content:center;border:2px solid #ffd700;border-radius:50%;background:#111;text-decoration:none;font-size:28px;box-shadow:0 0 14px rgba(255,215,0,.25)}.mentor-envelope-button .mentor-message-badge{right:-4px;top:-5px}.booking-history-search{width:90%;max-width:420px;margin:8px auto 14px!important}

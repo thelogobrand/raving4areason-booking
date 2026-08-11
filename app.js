@@ -27,6 +27,17 @@ function getTodayDate() {
   return new Date().toISOString().split("T")[0];
 }
 
+function isSessionStillCurrent(dateString, timeString) {
+  if (!dateString) return false;
+  const time = /^\d{2}:\d{2}$/.test(String(timeString || "")) ? String(timeString) : "23:59";
+  const sessionDateTime = new Date(`${dateString}T${time}:00`);
+  return !Number.isNaN(sessionDateTime.getTime()) && sessionDateTime.getTime() >= Date.now();
+}
+
+function isPastBooking(dateString, timeString) {
+  return !isSessionStillCurrent(dateString, timeString);
+}
+
 function formatDisplayDate(dateString) {
   if (!dateString) return "";
 
@@ -369,7 +380,7 @@ async function loadCalendar() {
   let html = "";
   let currentDate = "";
 
-  (data || []).forEach(slot => {
+  (data || []).filter(slot => isSessionStillCurrent(slot.date, slot.time)).forEach(slot => {
     if (slot.date !== currentDate) {
       currentDate = slot.date;
       html += `<h2 class="day-heading">${formatDisplayDate(slot.date)}</h2>`;
@@ -419,14 +430,15 @@ async function searchSlots() {
     return;
   }
 
-  if (!data || data.length === 0) {
+  const currentSlots = (data || []).filter(slot => isSessionStillCurrent(slot.date, slot.time));
+  if (currentSlots.length === 0) {
     resultsContainer.innerHTML = "<p>No matching available sessions found.</p>";
     return;
   }
 
   let html = "<h2>Search Results</h2>";
 
-  data.forEach(slot => {
+  currentSlots.forEach(slot => {
     html += `
       <div class="slot-card">
         <p><strong>${slot.mentor}</strong> — ${slot.type}</p>
@@ -462,7 +474,7 @@ async function renderAdminSlots() {
 
   let html = "";
 
-  (data || []).forEach(slot => {
+  (data || []).filter(slot => isSessionStillCurrent(slot.date, slot.time)).forEach(slot => {
     html += `
       <div class="slot-card">
         <p><strong>${formatDisplayDate(slot.date)}</strong></p>
@@ -1158,7 +1170,7 @@ async function renderBookedSessions() {
 
   let html = "";
 
-  (data || []).forEach(booking => {
+  (data || []).filter(booking => isSessionStillCurrent(booking.date, booking.time)).forEach(booking => {
     html += `
       <div class="slot-card">
         ${booking.booking_ref ? `<p class="booking-ref"><strong>${escapeHtml(booking.booking_ref)}</strong></p>` : ""}
@@ -1181,6 +1193,37 @@ async function renderBookedSessions() {
   });
 
   container.innerHTML = html || "<p>No booked sessions yet.</p>";
+}
+
+async function renderBookingHistory() {
+  const container = document.getElementById("adminBookingHistory");
+  if (!container) return;
+
+  const cutoff = new Date();
+  cutoff.setFullYear(cutoff.getFullYear() - 1);
+  const cutoffDate = cutoff.toISOString().split("T")[0];
+  const { data, error } = await db.from("bookings").select("*")
+    .gte("date", cutoffDate).lte("date", getTodayDate())
+    .order("date", { ascending: false }).order("time", { ascending: false });
+  if (error) { container.innerHTML = "<p>Error loading booking history.</p>"; return; }
+  const past = (data || []).filter(b => isPastBooking(b.date, b.time));
+  container.innerHTML = past.map(booking => `
+    <div class="slot-card booking-history-card">
+      ${booking.booking_ref ? `<p class="booking-ref"><strong>${escapeHtml(booking.booking_ref)}</strong></p>` : ""}
+      <p><strong>${escapeHtml(booking.child || "")}</strong></p>
+      <p>Parent: ${escapeHtml(booking.parent || "")}</p>
+      <p>${escapeHtml(booking.mentor || "")} — ${escapeHtml(booking.type || "")}</p>
+      <p>${escapeHtml(booking.location || "")}</p>
+      <p>${formatDisplayDate(booking.date)} · ${escapeHtml(booking.time || "")}</p>
+    </div>`).join("") || "<p>No booked-session history in the last 12 months.</p>";
+  filterBookingHistory();
+}
+
+function filterBookingHistory() {
+  const q = (document.getElementById("bookingHistorySearch")?.value || "").trim().toLowerCase();
+  document.querySelectorAll("#adminBookingHistory .booking-history-card").forEach(card => {
+    card.style.display = !q || card.textContent.toLowerCase().includes(q) ? "block" : "none";
+  });
 }
 
 async function togglePaid(id, currentStatus) {
@@ -1235,7 +1278,7 @@ async function renderMentorBookedSessions() {
     return;
   }
 
-  const bookings = data || [];
+  const bookings = (data || []).filter(booking => isSessionStillCurrent(booking.date, booking.time));
   container.innerHTML = bookings.map(booking => `
     <div class="slot-card">
       ${booking.booking_ref ? `<p class="booking-ref"><strong>${escapeHtml(booking.booking_ref)}</strong></p>` : ""}
@@ -1718,7 +1761,7 @@ async function renderMentorAvailability() {
     return;
   }
 
-  container.innerHTML = (data || []).map(slot => `
+  container.innerHTML = (data || []).filter(slot => isSessionStillCurrent(slot.date, slot.time)).map(slot => `
     <div class="slot-card">
       <p><strong>${formatDisplayDate(slot.date)}</strong></p>
       <p>${escapeHtml(slot.type || "")}</p>
@@ -1753,9 +1796,9 @@ async function loadMentorDashboard() {
   const summary = document.getElementById("mentorSummary");
   if (!mentorName || !summary) return;
 
-  const [{ count: availableCount }, { data: bookings }, { data: unreadMessages }] =
+  const [{ data: availableSessions }, { data: bookingsRaw }, { data: unreadMessages }] =
     await Promise.all([
-      db.from("sessions").select("*", { count: "exact", head: true })
+      db.from("sessions").select("*")
         .eq("mentor", mentorName).gte("date", getTodayDate()),
       db.from("bookings").select("*")
         .eq("mentor", mentorName).gte("date", getTodayDate())
@@ -1764,8 +1807,10 @@ async function loadMentorDashboard() {
         .eq("mentor", mentorName).eq("recipient", "mentor").eq("is_read", false)
     ]);
 
+  const availableCount = (availableSessions || []).filter(s => isSessionStillCurrent(s.date, s.time)).length;
+  const bookings = (bookingsRaw || []).filter(b => isSessionStillCurrent(b.date, b.time));
   const items = [];
-  if ((availableCount || 0) > 0) {
+  if (availableCount > 0) {
     items.push(`<button class="summary-card" onclick="openMentorSection('mentorAvailabilitySection')">
       🟢 <strong>${availableCount}</strong> Available Session${availableCount === 1 ? "" : "s"}
     </button>`);
@@ -2443,7 +2488,7 @@ async function deleteMessageThread(kind, value){
 async function adminMessageBookingMentor(id){ const {data:b}=await db.from('bookings').select('*').eq('id',id).single(); if(!b)return; const text=prompt(`Message ${b.mentor}:`); if(!text)return; const {error}=await db.from('messages').insert([{booking_id:id,mentor:b.mentor,child_name:b.child,parent_email:b.email,sender_name:'Admin',sender_role:'admin',recipient:'mentor',thread_type:'booking_admin_mentor',message:text,is_read:false}]); if(error)return alert(error.message); alert('Message sent to mentor'); }
 async function adminMessageBookingParent(id){ const {data:b}=await db.from('bookings').select('*').eq('id',id).single(); if(!b)return; const text=prompt(`Message ${b.parent}:`); if(!text)return; const {error}=await db.from('messages').insert([{booking_id:id,mentor:b.mentor,child_name:b.child,parent_email:b.email,sender_name:'Admin',sender_role:'admin',recipient:'parent',thread_type:'booking',message:text,is_read:false}]); if(error)return alert(error.message); alert('Message sent to parent'); }
 
-function printSessionList(kind){ const source=kind==='booked'?document.getElementById('adminBookedSessions'):document.getElementById('adminSlots'); if(!source)return; const w=window.open('','_blank'); w.document.write(`<html><head><title>R4AR ${kind} sessions</title><style>body{font-family:Arial;padding:25px}.slot-card{border:1px solid #bbb;padding:12px;margin:10px 0}button,input,label,textarea{display:none}</style></head><body><h1>Raving 4 A Reason — ${kind==='booked'?'Booked':'Available'} Sessions</h1>${source.innerHTML}<script>window.onload=()=>window.print()<\\/script></body></html>`); w.document.close(); }
+function printSessionList(kind){ const source=kind==='history'?document.getElementById('adminBookingHistory'):(kind==='booked'?document.getElementById('adminBookedSessions'):document.getElementById('adminSlots')); if(!source)return; const w=window.open('','_blank'); w.document.write(`<html><head><title>R4AR ${kind} sessions</title><style>body{font-family:Arial;padding:25px}.slot-card{border:1px solid #bbb;padding:12px;margin:10px 0}button,input,label,textarea{display:none}</style></head><body><h1>Raving 4 A Reason — ${kind==='history'?'Booking History':(kind==='booked'?'Booked':'Available')} Sessions</h1>${source.innerHTML}<script>window.onload=()=>window.print()<\\/script></body></html>`); w.document.close(); }
 
 async function saveParentMailingConsent(){ const first_name=document.getElementById('mailingFirstName')?.value.trim()||''; const surname=document.getElementById('mailingSurname')?.value.trim()||''; const child_member_name=document.getElementById('mailingChildMemberName')?.value.trim()||null; const email=document.getElementById('mailingParentEmail')?.value.trim()||''; const consent=!!document.getElementById('mailingParentConsent')?.checked; if(!first_name||!surname||!email||!consent)return alert('Please enter first name, surname, email and tick consent'); const {error}=await db.from('mailing_list').upsert([{first_name,surname,child_member_name,email,consent:true,source:'Parent portal',updated_at:new Date().toISOString()}],{onConflict:'email'}); if(error)return alert(error.message); alert('Thank you — your mailing preference has been saved.'); }
 
@@ -2470,7 +2515,7 @@ async function initAdminSubpage(){
  const protectedBox=document.getElementById('adminProtectedPage');
  if(page && localStorage.getItem('adminLoggedIn')!=='true'){ location.replace('admin.html'); return; }
  if(protectedBox) protectedBox.style.display='block';
- if(page==='sessions'){await loadAdminDropdowns();await renderAdminSlots();await renderBookedSessions();}
+ if(page==='sessions'){await loadAdminDropdowns();await renderAdminSlots();await renderBookedSessions();await renderBookingHistory();}
  if(page==='locations'){await renderAdminLocations();}
  if(page==='expenses'){await renderAdminExpenses();}
  if(page==='members'){await renderMembers();}
