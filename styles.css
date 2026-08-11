@@ -760,3 +760,43 @@ input[type="file"] { padding:9px; }
 
 /* ===== PARENT PORTAL FINAL POLISH ===== */
 .parent-contact-panel{margin:16px 0;padding:16px;border:1px solid rgba(255,215,0,.35);border-radius:16px;background:#0d0d0d;text-align:center}.parent-contact-panel h2{margin-top:0;color:#ffd700}.contact-email-button{display:block;width:90%;max-width:420px;margin:12px auto;padding:13px 10px;border:1px solid rgba(255,215,0,.5);border-radius:12px;background:#151515;color:#ffd700;text-decoration:none;font-weight:700;overflow-wrap:anywhere}.mailing-optin-box{border-color:rgba(255,215,0,.45)!important;background:#151307!important}
+
+
+/* ===== MENTOR PORTAL FINAL POLISH ===== */
+.mentor-message-link{
+  width:90%;
+  max-width:340px;
+  margin:14px auto;
+  padding:14px 16px;
+  min-height:64px;
+  box-sizing:border-box;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:10px;
+  position:relative;
+  text-decoration:none;
+  color:#fff;
+  font-weight:800;
+  border-radius:14px;
+  border:2px solid #ffd700;
+  background:#111;
+  box-shadow:0 0 14px rgba(255,215,0,.28);
+}
+.mentor-message-envelope{font-size:28px;line-height:1}
+.mentor-message-badge{
+  display:none;
+  position:absolute;
+  right:10px;
+  top:7px;
+  min-width:20px;
+  height:20px;
+  padding:0 5px;
+  border-radius:12px;
+  background:#d22;
+  color:#fff;
+  font-size:12px;
+  line-height:20px;
+  text-align:center;
+}
+.mentor-message-badge:not(:empty){display:block}

@@ -699,7 +699,9 @@ function getBookingData() {
   const params = new URLSearchParams(window.location.search);
 
   const child = document.getElementById("childName")?.value.trim() || "";
-  const parent = document.getElementById("parentName")?.value.trim() || "";
+  const parentFirstName = document.getElementById("parentFirstName")?.value.trim() || "";
+  const parentSurname = document.getElementById("parentSurname")?.value.trim() || "";
+  const parent = [parentFirstName, parentSurname].filter(Boolean).join(" ");
   const phone = document.getElementById("parentPhone")?.value.trim() || "";
   const email = document.getElementById("email")?.value.trim() || "";
   const notes = document.getElementById("bookingNotes")?.value.trim() || "";
@@ -708,6 +710,8 @@ function getBookingData() {
   return {
     child,
     parent,
+    parentFirstName,
+    parentSurname,
     phone,
     email,
     notes,
@@ -721,6 +725,20 @@ function getBookingData() {
   };
 }
 
+function makeBookingReference(rawDate) {
+  const compact = String(rawDate || "").replace(/-/g, "").slice(2);
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let suffix = "";
+  if (window.crypto?.getRandomValues) {
+    const bytes = new Uint8Array(4);
+    crypto.getRandomValues(bytes);
+    suffix = Array.from(bytes, b => chars[b % chars.length]).join("");
+  } else {
+    suffix = Math.random().toString(36).slice(2, 6).toUpperCase().padEnd(4, "X");
+  }
+  return `R4AR-${compact || "BOOK"}-${suffix}`;
+}
+
 async function confirmBooking() {
   const booking = getBookingData();
   const consent = document.getElementById("gdprConsent")?.checked;
@@ -731,7 +749,7 @@ async function confirmBooking() {
     return;
   }
 
-  if (!booking.child || !booking.parent || !booking.phone || !booking.email) {
+  if (!booking.child || !booking.parentFirstName || !booking.parentSurname || !booking.phone || !booking.email) {
     alert("Please fill all details");
     return;
   }
@@ -747,6 +765,7 @@ async function confirmBooking() {
   if (!ok) return;
 
   const chatToken = (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`) + "-" + Math.random().toString(36).slice(2);
+  const bookingRef = makeBookingReference(booking.rawDate);
 
   const { data: savedBooking, error } = await db
     .from("bookings")
@@ -762,9 +781,10 @@ async function confirmBooking() {
       time: booking.time,
       paid: false,
       notes: booking.notes || null,
-      chat_token: chatToken
+      chat_token: chatToken,
+      booking_ref: bookingRef
     }])
-    .select("id,chat_token")
+    .select("id,chat_token,booking_ref")
     .single();
 
   if (error) {
@@ -774,12 +794,9 @@ async function confirmBooking() {
   }
 
   if (mailingConsent && booking.email) {
-    const parentParts = (booking.parent || "").trim().split(/\s+/).filter(Boolean);
-    const firstName = parentParts.shift() || null;
-    const surname = parentParts.join(" ") || null;
     const { error: mailingError } = await db.from("mailing_list").upsert([{
-      first_name: firstName,
-      surname: surname,
+      first_name: booking.parentFirstName,
+      surname: booking.parentSurname,
       child_member_name: booking.child || null,
       email: booking.email.trim(),
       consent: true,
@@ -806,6 +823,7 @@ async function confirmBooking() {
           type: booking.type,
           mentor: booking.mentor,
           parent_email: booking.email,
+          booking_ref: savedBooking?.booking_ref || bookingRef,
           chat_url: chatUrl
         }
       })
@@ -825,6 +843,7 @@ async function confirmBooking() {
     date: booking.rawDate,
     time: booking.time,
     booking_id: savedBooking?.id || "",
+    booking_ref: savedBooking?.booking_ref || bookingRef,
     chat_token: chatToken
   });
 
@@ -844,6 +863,7 @@ function loadConfirmedPage() {
   if (!booking.mentor || !booking.type || !booking.location || !booking.rawDate || !booking.time) return;
 
   container.innerHTML = `
+    ${booking.booking_ref ? `<p class="booking-ref"><strong>Booking Ref: ${escapeHtml(booking.booking_ref)}</strong></p>` : ""}
     <p><strong>${booking.mentor}</strong> — ${booking.type}</p>
     <p>${booking.location}</p>
     <p>${booking.date}</p>
@@ -869,6 +889,7 @@ function getConfirmedData() {
     date: rawDate ? formatDisplayDate(rawDate) : "",
     time: params.get("time") || "",
     booking_id: params.get("booking_id") || "",
+    booking_ref: params.get("booking_ref") || "",
     chat_token: params.get("chat_token") || ""
   };
 }
@@ -1140,6 +1161,7 @@ async function renderBookedSessions() {
   (data || []).forEach(booking => {
     html += `
       <div class="slot-card">
+        ${booking.booking_ref ? `<p class="booking-ref"><strong>${escapeHtml(booking.booking_ref)}</strong></p>` : ""}
         <p><strong>${booking.child}</strong></p>
         <p>Parent: ${booking.parent}</p>
         <p>${booking.mentor} — ${booking.type}</p>
@@ -1216,6 +1238,7 @@ async function renderMentorBookedSessions() {
   const bookings = data || [];
   container.innerHTML = bookings.map(booking => `
     <div class="slot-card">
+      ${booking.booking_ref ? `<p class="booking-ref"><strong>${escapeHtml(booking.booking_ref)}</strong></p>` : ""}
       <p><strong>${escapeHtml(booking.child)}</strong></p>
       <p>Parent: ${escapeHtml(booking.parent || "")}</p>
       <p>${escapeHtml(booking.type || "")}</p>
@@ -1227,6 +1250,7 @@ async function renderMentorBookedSessions() {
           <strong>Parent notes</strong>
           <p>${escapeHtml(booking.notes)}</p>
         </div>` : ""}
+      <button class="secondary" onclick="openMentorBookingChat('${booking.id}')">💬 VIEW BOOKING CHAT</button>
     </div>
   `).join("") || "<p>No upcoming booked sessions.</p>";
 }
@@ -1756,8 +1780,8 @@ async function loadMentorDashboard() {
 
   const messageCount = unreadMessages?.length || 0;
   if (messageCount > 0) {
-    items.push(`<button class="summary-card" onclick="openMentorSection('mentorMessagesSection')">
-      💬 <strong>${messageCount}</strong> New Message${messageCount === 1 ? "" : "s"}
+    items.push(`<button class="summary-card" onclick="window.location.href='mentor-messages.html'">
+      ✉️ <strong>${messageCount}</strong> New Message${messageCount === 1 ? "" : "s"}
     </button>`);
   }
 
@@ -1807,14 +1831,17 @@ function messageDateTime(value) {
 async function renderMentorMessages(){
  const c=document.getElementById("mentorMessages"), mentor=getLoggedInMentorName(); if(!c||!mentor)return; await cleanupExpiredMessages();
  const {data,error}=await db.from("messages").select("*").eq("mentor",mentor).order("created_at",{ascending:true}); if(error){c.innerHTML="<p>Unable to load messages.</p>";return;}
- const msgs=data||[], groups={}; msgs.forEach(m=>{let key=m.thread_type==="booking"?`booking:${m.booking_id}`:"admin";(groups[key]??=[]).push(m)});
+ const msgs=data||[], groups={}; msgs.forEach(m=>{let key=m.thread_type==="booking"?`booking:${m.booking_id}`:(m.thread_type==="booking_admin_mentor"?`booking-admin:${m.booking_id}`:"admin");(groups[key]??=[]).push(m)});
  let bookingMap={}; const ids=[...new Set(msgs.map(m=>m.booking_id).filter(Boolean))]; if(ids.length){const {data:b}=await db.from("bookings").select("*").in("id",ids);(b||[]).forEach(x=>bookingMap[x.id]=x)}
  c.innerHTML=`<div class="message-safety-note">Messages are kept for 14 days.</div><div class="message-compose-card"><h3>Message Admin</h3><textarea id="mentorAdminMessage" class="mentor-textarea" placeholder="Type your message to admin"></textarea><button onclick="sendMentorAdminMessage()">SEND TO ADMIN</button></div>`+Object.entries(groups).map(([key,arr])=>{
-   const b=key.startsWith('booking:')?bookingMap[arr[0].booking_id]:null; const title=b?`${escapeHtml(b.parent||b.child||'Parent')} — ${formatDisplayDate(b.date)} at ${escapeHtml(b.time||'')}`:'Admin';
-   return `<div class="chat-thread"><h3>${title}</h3>${b?`<p class="small-muted">${escapeHtml(b.type||'')} • ${escapeHtml(b.location||'')}</p>`:''}<div class="chat-list">${arr.map(m=>`<div class="chat-bubble ${m.sender_role==='mentor'?'chat-mine':'chat-other'}"><strong>${escapeHtml(m.sender_name||m.sender_role)}</strong><p>${escapeHtml(m.message||'')}</p><span>${messageDateTime(m.created_at)}</span></div>`).join('')}</div>${b?`<textarea id="threadReply-${b.id}" class="mentor-textarea" placeholder="Reply to parent"></textarea><button onclick="replyMentorThread('${b.id}')">SEND REPLY</button><button class="secondary danger-btn" onclick="deleteMessageThread('booking','${b.id}')">DELETE CHAT</button>`:`<button class="secondary danger-btn" onclick="deleteMessageThread('mentor','${mentor}')">DELETE CHAT</button>`}</div>`;
+   const b=(key.startsWith('booking:')||key.startsWith('booking-admin:'))?bookingMap[arr[0].booking_id]:null; const adminBooking=key.startsWith('booking-admin:'); const title=b?`${b.booking_ref ? escapeHtml(b.booking_ref)+' — ' : ''}${adminBooking?'Admin — ':escapeHtml(b.parent||b.child||'Parent')+' — '}${formatDisplayDate(b.date)} at ${escapeHtml(b.time||'')}`:'Admin';
+   return `<div class="chat-thread" ${b ? `id="booking-thread-${b.id}"` : ""}><h3>${title}</h3>${b?`<p class="small-muted">${escapeHtml(b.type||'')} • ${escapeHtml(b.location||'')}</p>`:''}<div class="chat-list">${arr.map(m=>`<div class="chat-bubble ${m.sender_role==='mentor'?'chat-mine':'chat-other'}"><strong>${escapeHtml(m.sender_name||m.sender_role)}</strong><p>${escapeHtml(m.message||'')}</p><span>${messageDateTime(m.created_at)}</span></div>`).join('')}</div>${b?`<textarea id="threadReply-${adminBooking?'admin-':''}${b.id}" class="mentor-textarea" placeholder="${adminBooking?'Reply to admin':'Reply to parent'}"></textarea><button onclick="${adminBooking?`replyMentorAdminBookingThread('${b.id}')`:`replyMentorThread('${b.id}')`}">SEND REPLY</button><button class="secondary danger-btn" onclick="deleteMessageThread('booking','${b.id}')">DELETE CHAT</button>`:`<button class="secondary danger-btn" onclick="deleteMessageThread('mentor','${mentor}')">DELETE CHAT</button>`}</div>`;
  }).join('');
  const unread=msgs.filter(m=>!m.is_read&&(m.recipient==='mentor'||m.recipient==='both')).map(m=>m.id); if(unread.length)await db.from("messages").update({is_read:true}).in("id",unread);
+ const focusId=new URLSearchParams(window.location.search).get("booking_id");
+ if(focusId) setTimeout(()=>document.getElementById(`booking-thread-${focusId}`)?.scrollIntoView({behavior:"smooth",block:"start"}),100);
 }
+async function replyMentorAdminBookingThread(bookingId){const input=document.getElementById(`threadReply-admin-${bookingId}`),text=input?.value.trim()||'';if(!text)return;const {data:b}=await db.from('bookings').select('*').eq('id',bookingId).single();if(!b)return;const mentor=getLoggedInMentorName();const {error}=await db.from('messages').insert([{booking_id:bookingId,mentor,child_name:b.child,parent_email:b.email,sender_name:mentor,sender_role:'mentor',recipient:'admin',thread_type:'booking_admin_mentor',message:text,is_read:false}]);if(error)return alert('Error sending reply: '+error.message);input.value='';await renderMentorMessages();}
 async function replyMentorThread(bookingId){const input=document.getElementById(`threadReply-${bookingId}`),text=input?.value.trim()||'';if(!text)return;const {data:b}=await db.from('bookings').select('*').eq('id',bookingId).single();if(!b)return;const mentor=getLoggedInMentorName();const {error}=await db.from('messages').insert([{booking_id:bookingId,mentor,child_name:b.child,parent_email:b.email,sender_name:mentor,sender_role:'mentor',recipient:'parent',thread_type:'booking',message:text,is_read:false}]);if(error)return alert('Error sending reply: '+error.message);input.value='';await renderMentorMessages();}
 
 async function sendMentorAdminMessage() {
@@ -1877,27 +1904,44 @@ async function renderMentorNewsletter() {
   const container = document.getElementById("mentorNewsletter");
   if (!container) return;
 
-  const { data, error } = await db
-    .from("newsletters")
-    .select("*")
-    .order("published_at", { ascending: false })
-    .limit(3);
+  const [{ data: newsletters, error: newsletterError }, { data: events, error: eventError }] =
+    await Promise.all([
+      db.from("newsletters").select("*").order("created_at", { ascending: false }).limit(3),
+      db.from("events").select("*").gte("event_date", getTodayDate()).order("event_date", { ascending: true })
+    ]);
 
-  if (error) {
-    console.error(error);
-    container.innerHTML = "<p>No newsletter has been uploaded yet.</p>";
-    return;
-  }
+  if (newsletterError) console.error("Mentor newsletter error:", newsletterError);
+  if (eventError) console.error("Mentor events error:", eventError);
 
-  container.innerHTML = (data || []).map((item, index) => `
+  const newsletterHtml = (newsletters || []).map((item, index) => `
     <div class="slot-card">
-      <p><strong>${index === 0 ? "Latest: " : ""}${escapeHtml(item.title)}</strong></p>
-      <p>${formatShortDate(item.published_at)}</p>
-      <a class="download-link" href="${escapeHtml(item.file_url)}" target="_blank" rel="noopener">
-        DOWNLOAD NEWSLETTER
-      </a>
+      ${item.image_url ? `<img class="event-image" src="${escapeHtml(item.image_url)}" alt="">` : ""}
+      <p><strong>${index === 0 ? "Latest: " : ""}${escapeHtml(item.title || "Newsletter")}</strong></p>
+      <p>${formatShortDate(item.published_date || item.published_at || item.created_at)}</p>
+      ${item.file_url ? `<a class="download-link" href="${escapeHtml(item.file_url)}" target="_blank" rel="noopener">OPEN NEWSLETTER</a>` : ""}
     </div>
-  `).join("") || "<p>No newsletter has been uploaded yet.</p>";
+  `).join("") || "<p>No newsletters yet.</p>";
+
+  const eventHtml = (events || []).map(item => `
+    <div class="slot-card">
+      ${item.image_url ? `<img class="event-image" src="${escapeHtml(item.image_url)}" alt="">` : ""}
+      <p><strong>${escapeHtml(item.title || "Event")}</strong></p>
+      <p>📅 ${formatDisplayDate(item.event_date)}</p>
+      <p>🕒 ${escapeHtml(item.start_time || "")}${item.end_time ? ` – ${escapeHtml(item.end_time)}` : ""}</p>
+      <p>📍 ${escapeHtml(item.location || "")}</p>
+      ${item.age_restriction ? `<p>Age: ${escapeHtml(item.age_restriction)}</p>` : ""}
+      ${item.ticket_price ? `<p>Tickets: ${escapeHtml(item.ticket_price)}</p>` : ""}
+      ${item.details ? `<p>${escapeHtml(item.details)}</p>` : ""}
+      ${item.ticket_url ? `<a class="download-link" href="${escapeHtml(item.ticket_url)}" target="_blank" rel="noopener">TICKETS / FACEBOOK</a>` : ""}
+    </div>
+  `).join("") || "<p>No upcoming events.</p>";
+
+  container.innerHTML = `
+    <h2>Newsletters</h2>
+    ${newsletterHtml}
+    <h2>Upcoming Events</h2>
+    ${eventHtml}
+  `;
 }
 
 const DEFAULT_MILEAGE_RATE = 0.45;
@@ -2151,6 +2195,11 @@ function escapeHtml(value) {
 }
 
 
+
+function openMentorBookingChat(bookingId) {
+  window.location.href = `mentor-messages.html?booking_id=${encodeURIComponent(bookingId)}`;
+}
+
 /* =========================
    MESSAGING V2
 ========================= */
@@ -2173,6 +2222,7 @@ async function loadBookingChatPage() {
   }
   currentBookingChat = booking;
   details.innerHTML = `
+    ${booking.booking_ref ? `<p class="booking-ref"><strong>Booking Ref: ${escapeHtml(booking.booking_ref)}</strong></p>` : ""}
     <p><strong>${escapeHtml(booking.child || "")}</strong></p>
     <p>Mentor: ${escapeHtml(booking.mentor || "")}</p>
     <p>${formatDisplayDate(booking.date)} at ${escapeHtml(booking.time || "")}</p>
@@ -2390,8 +2440,8 @@ async function deleteMessageThread(kind, value){
  await Promise.all([renderAdminMessages(),renderMentorMessages(),renderParentAdminChat?.()]);
 }
 
-async function adminMessageBookingMentor(id){ const {data:b}=await db.from('bookings').select('*').eq('id',id).single(); if(!b)return; const text=prompt(`Message ${b.mentor}:`); if(!text)return; const {error}=await db.from('messages').insert([{booking_id:id,mentor:b.mentor,child_name:b.child,parent_email:b.email,sender_name:'Admin',sender_role:'admin',recipient:'mentor',thread_type:'admin_mentor',message:text,is_read:false}]); if(error)return alert(error.message); alert('Message sent to mentor'); }
-async function adminMessageBookingParent(id){ const {data:b}=await db.from('bookings').select('*').eq('id',id).single(); if(!b)return; const text=prompt(`Message ${b.parent}:`); if(!text)return; const {error}=await db.from('messages').insert([{booking_id:id,mentor:b.mentor,child_name:b.child,parent_email:b.email,sender_name:'Admin',sender_role:'admin',recipient:'parent',thread_type:'parent_admin',message:text,is_read:false}]); if(error)return alert(error.message); alert('Message sent to parent'); }
+async function adminMessageBookingMentor(id){ const {data:b}=await db.from('bookings').select('*').eq('id',id).single(); if(!b)return; const text=prompt(`Message ${b.mentor}:`); if(!text)return; const {error}=await db.from('messages').insert([{booking_id:id,mentor:b.mentor,child_name:b.child,parent_email:b.email,sender_name:'Admin',sender_role:'admin',recipient:'mentor',thread_type:'booking_admin_mentor',message:text,is_read:false}]); if(error)return alert(error.message); alert('Message sent to mentor'); }
+async function adminMessageBookingParent(id){ const {data:b}=await db.from('bookings').select('*').eq('id',id).single(); if(!b)return; const text=prompt(`Message ${b.parent}:`); if(!text)return; const {error}=await db.from('messages').insert([{booking_id:id,mentor:b.mentor,child_name:b.child,parent_email:b.email,sender_name:'Admin',sender_role:'admin',recipient:'parent',thread_type:'booking',message:text,is_read:false}]); if(error)return alert(error.message); alert('Message sent to parent'); }
 
 function printSessionList(kind){ const source=kind==='booked'?document.getElementById('adminBookedSessions'):document.getElementById('adminSlots'); if(!source)return; const w=window.open('','_blank'); w.document.write(`<html><head><title>R4AR ${kind} sessions</title><style>body{font-family:Arial;padding:25px}.slot-card{border:1px solid #bbb;padding:12px;margin:10px 0}button,input,label,textarea{display:none}</style></head><body><h1>Raving 4 A Reason — ${kind==='booked'?'Booked':'Available'} Sessions</h1>${source.innerHTML}<script>window.onload=()=>window.print()<\\/script></body></html>`); w.document.close(); }
 

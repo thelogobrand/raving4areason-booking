@@ -70,12 +70,13 @@
         <div id="mentorBookedSessions"></div>
       </section>
 
-      <button onclick="toggleSection('mentorMessagesSection')" class="mentor-menu-btn">💬 MESSAGES <span id="mentorMessageBadge"></span></button>
-      <section id="mentorMessagesSection" class="mentor-section" style="display:none;">
-        <div id="mentorMessages"></div>
-      </section>
+      <a href="mentor-messages.html" class="mentor-message-link" aria-label="Open messages">
+        <span class="mentor-message-envelope">✉️</span>
+        <span>MESSAGES</span>
+        <span id="mentorMessageBadge" class="mentor-message-badge"></span>
+      </a>
 
-      <button onclick="toggleSection('mentorNewsletterSection')" class="mentor-menu-btn">📰 NEWSLETTER</button>
+      <button onclick="toggleSection('mentorNewsletterSection')" class="mentor-menu-btn">📰 NEWS &amp; EVENTS</button>
       <section id="mentorNewsletterSection" class="mentor-section" style="display:none;">
         <div id="mentorNewsletter"></div>
       </section>
