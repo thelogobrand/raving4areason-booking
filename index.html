@@ -25,12 +25,17 @@
       <button onclick="goToCalendar()" class="secondary">AVAILABLE SESSIONS</button>
       <button onclick="goToNewsletter()" class="secondary">NEWS & EVENTS</button>
 
-      <button onclick="goToParentAdminChat()" class="secondary">💬 MESSAGE ADMIN</button>
-
       <div class="parent-secondary-actions">
-        <button onclick="goToContact()" class="footer-action-btn">CONTACT US</button>
+        <button onclick="toggleParentContact()" class="footer-action-btn">CONTACT US</button>
         <button onclick="openDonationPage()" class="footer-action-btn donation-btn">❤️ MAKE A DONATION</button>
       </div>
+
+      <section id="parentContactSection" class="parent-contact-panel" style="display:none;">
+        <h2>Contact Us</h2>
+        <p class="small-muted">Need help with a booking or have a question?</p>
+        <a class="contact-email-button" href="mailto:Raving4areason1@outlook.com">✉️ Raving4areason1@outlook.com</a>
+        <button onclick="goToParentAdminChat()" class="secondary">💬 MESSAGE ADMIN</button>
+      </section>
 
       <button onclick="logoutParent()" class="logout-btn">LOG OUT</button>
     </div>

@@ -104,6 +104,13 @@ function goToContact() {
   window.location.href = "contact.html";
 }
 
+function toggleParentContact() {
+  const section = document.getElementById("parentContactSection");
+  if (!section) return;
+  section.style.display = section.style.display === "none" ? "block" : "none";
+  if (section.style.display === "block") section.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
 function goToParentAdminChat() {
   window.location.href = "parent-admin-chat.html";
 }
@@ -717,6 +724,7 @@ function getBookingData() {
 async function confirmBooking() {
   const booking = getBookingData();
   const consent = document.getElementById("gdprConsent")?.checked;
+  const mailingConsent = document.getElementById("bookingMailingConsent")?.checked === true;
 
   if (!consent) {
     alert("Please confirm consent to continue");
@@ -763,6 +771,15 @@ async function confirmBooking() {
     console.error(error);
     alert("Error saving booking");
     return;
+  }
+
+  if (mailingConsent && booking.email) {
+    const { error: mailingError } = await db.from("mailing_list").upsert([{
+      name: booking.parent || null,
+      email: booking.email.trim(),
+      consent: true
+    }], { onConflict: "email" });
+    if (mailingError) console.warn("Booking saved but mailing-list opt-in could not be saved", mailingError);
   }
 
   await removeBookedSlot(booking);
