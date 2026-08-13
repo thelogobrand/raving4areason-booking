@@ -19,6 +19,15 @@ export async function handler(event) {
         })
       };
     }
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    let emailSettings = {};
+    if (serviceKey) {
+      try {
+        const sr = await fetch("https://ejizwiegnxtwglihrxiz.supabase.co/rest/v1/secure_settings?select=setting_key,setting_value", { headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` } });
+        if (sr.ok) { const rows = await sr.json(); emailSettings = Object.fromEntries(rows.map(x => [x.setting_key, x.setting_value])); }
+      } catch {}
+    }
+
 
     const lines = [
       "New Raving 4 A Reason Expense",
@@ -54,8 +63,9 @@ export async function handler(event) {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          from: "Raving 4 A Reason <onboarding@resend.dev>",
-          to: ["unitypromotionsuk@gmail.com"],
+          from: `Raving 4 A Reason <${emailSettings.from_email || "onboarding@resend.dev"}>`,
+          to: [emailSettings.expense_email || emailSettings.notification_email || "unitypromotionsuk@gmail.com"],
+          reply_to: emailSettings.reply_to_email || undefined,
           subject: `New expense from ${
             expense.mentor || "mentor"
           }`,
