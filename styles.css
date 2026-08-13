@@ -807,3 +807,68 @@ input[type="file"] { padding:9px; }
 /* ===== ADMIN FINAL PASS ===== */
 .section-bottom-action{margin-top:22px!important;margin-bottom:28px!important}
 .record-card{background:#111;border:1px solid #2a2a2a;border-radius:16px;padding:16px;margin:12px 0;text-align:left}.record-card h3{margin:0 0 6px;color:#fff}.record-meta{color:#bbb;font-size:13px;line-height:1.5}.record-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.record-actions button{width:auto;min-width:110px;margin:0;padding:9px 13px;font-size:13px}.admin-notes-large{min-height:150px!important}.contact-checks{display:grid;grid-template-columns:1fr 1fr;gap:8px;width:90%;max-width:340px;margin:8px auto 14px}.contact-checks label,.dbs-row{display:flex!important;align-items:center;gap:8px}.contact-checks input,.dbs-row input{width:auto!important;margin:0!important}.cancelled-card{opacity:.8;border-color:#8b1c1c}.status-chip{display:inline-block;padding:4px 9px;border-radius:999px;background:#222;font-size:12px}.status-chip.approved{color:#ffd700}.status-chip.paid{color:#7ee787}.status-chip.cancelled{color:#ff8a8a}.time-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;width:90%;max-width:340px;margin:10px auto}.time-grid .time-choice{width:100%;margin:0;padding:10px}.time-grid .time-choice.selected{outline:2px solid #ffd700;background:#222}.event-image{max-width:100%;border-radius:12px;margin-bottom:10px}.dashboard-link{border:1px solid rgba(255,215,0,.35)!important}.dashboard-link:hover{transform:translateY(-1px)}
+
+
+/* ===== MENTOR FINAL 3-FIX PATCH ===== */
+.mentor-hero-actions{
+  position:relative;
+  width:100%;
+  max-width:430px;
+  min-height:132px;
+  margin:0 auto 14px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+.mentor-hero-actions .mentor-avatar-button{
+  margin:0 auto!important;
+  position:relative;
+  left:auto;right:auto;
+}
+.mentor-hero-actions .mentor-envelope-button{
+  position:absolute;
+  right:18px;
+  top:50%;
+  transform:translateY(-50%);
+  margin:0;
+}
+@media (max-width:480px){
+  .mentor-hero-actions .mentor-envelope-button{right:8px;}
+}
+
+/* Admin final tidy-up: mentor notes + message category panels */
+.admin-notes-field {
+  display:block;
+  width:90%;
+  max-width:560px;
+  min-height:96px;
+  margin:10px auto;
+  padding:14px 16px;
+  box-sizing:border-box;
+  border:1px solid rgba(255,255,255,.22);
+  border-radius:12px;
+  background:#171717;
+  color:#fff;
+  font:inherit;
+  resize:vertical;
+}
+.admin-notes-field::placeholder { color:#9a9a9a; }
+.admin-message-category {
+  margin:22px 0 30px;
+  padding-top:4px;
+}
+.admin-message-category > h2 {
+  color:#ffd700;
+  margin:8px 0 14px;
+  text-align:center;
+}
+.admin-message-category .category-count {
+  display:inline-block;
+  min-width:22px;
+  padding:2px 7px;
+  margin-left:6px;
+  border:1px solid rgba(255,215,0,.55);
+  border-radius:999px;
+  font-size:12px;
+  vertical-align:middle;
+}

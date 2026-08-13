@@ -1876,7 +1876,10 @@ function messageDateTime(value) {
 async function renderMentorMessages(){
  const c=document.getElementById("mentorMessages"), mentor=getLoggedInMentorName(); if(!c||!mentor)return; await cleanupExpiredMessages();
  const {data,error}=await db.from("messages").select("*").eq("mentor",mentor).order("created_at",{ascending:true}); if(error){c.innerHTML="<p>Unable to load messages.</p>";return;}
- const msgs=data||[], groups={}; msgs.forEach(m=>{let key=m.thread_type==="booking"?`booking:${m.booking_id}`:(m.thread_type==="booking_admin_mentor"?`booking-admin:${m.booking_id}`:"admin");(groups[key]??=[]).push(m)});
+ // Mentor must never see Parent↔Admin threads. Only show conversations the mentor is actually part of.
+ const allowedMentorThreads=new Set(["booking","mentor_admin","admin_mentor","booking_admin_mentor","broadcast"]);
+ const msgs=(data||[]).filter(m=>allowedMentorThreads.has(m.thread_type));
+ const groups={}; msgs.forEach(m=>{let key=m.thread_type==="booking"?`booking:${m.booking_id}`:(m.thread_type==="booking_admin_mentor"?`booking-admin:${m.booking_id}`:"admin");(groups[key]??=[]).push(m)});
  let bookingMap={}; const ids=[...new Set(msgs.map(m=>m.booking_id).filter(Boolean))]; if(ids.length){const {data:b}=await db.from("bookings").select("*").in("id",ids);(b||[]).forEach(x=>bookingMap[x.id]=x)}
  c.innerHTML=`<div class="message-safety-note">Messages are kept for 14 days.</div><div class="message-compose-card"><h3>Message Admin</h3><textarea id="mentorAdminMessage" class="mentor-textarea" placeholder="Type your message to admin"></textarea><button onclick="sendMentorAdminMessage()">SEND TO ADMIN</button></div>`+Object.entries(groups).map(([key,arr])=>{
    const b=(key.startsWith('booking:')||key.startsWith('booking-admin:'))?bookingMap[arr[0].booking_id]:null; const adminBooking=key.startsWith('booking-admin:'); const title=b?`${b.booking_ref ? escapeHtml(b.booking_ref)+' — ' : ''}${adminBooking?'Admin — ':escapeHtml(b.parent||b.child||'Parent')+' — '}${formatDisplayDate(b.date)} at ${escapeHtml(b.time||'')}`:'Admin';
@@ -2095,6 +2098,7 @@ async function renderMentorExpenses() {
     .from("expenses")
     .select("*")
     .eq("mentor", mentor)
+    .or("hidden_from_mentor.is.null,hidden_from_mentor.eq.false")
     .order("expense_date", { ascending: false });
 
   if (error) {
@@ -2112,8 +2116,18 @@ async function renderMentorExpenses() {
       <p>${escapeHtml(item.reason || "")}</p>
       <p>Status: <strong>${escapeHtml(item.status || "Pending")}</strong></p>
       ${item.receipt_url ? `<a class="download-link" href="${escapeHtml(item.receipt_url)}" target="_blank" rel="noopener">VIEW RECEIPT</a>` : ""}
+      <button type="button" class="secondary danger-btn" onclick="hideMentorExpense('${item.id}')">REMOVE FROM MY PORTAL</button>
     </div>
   `).join("") || "<p>No expense claims submitted.</p>";
+}
+
+
+async function hideMentorExpense(id) {
+  if (!id) return;
+  if (!confirm("Remove this expense from your Mentor Portal?\n\nIt will stay in Admin records.")) return;
+  const { error } = await db.from("expenses").update({ hidden_from_mentor: true }).eq("id", id);
+  if (error) return alert("Could not remove expense: " + error.message);
+  await renderMentorExpenses();
 }
 
 /* =========================
@@ -2697,3 +2711,77 @@ async function sendParentBookingAdminMessage(){
  const {error}=await db.from('messages').insert([{booking_id:currentBookingChat.id,mentor:currentBookingChat.mentor,child_name:currentBookingChat.child,parent_email:currentBookingChat.email,sender_name:currentBookingChat.parent,sender_role:'parent',recipient:'admin',thread_type:'booking_admin_parent',message:text,is_read:false}]);if(error)return alert('Error sending message: '+error.message);input.value='';await renderParentBookingChat();
 }
 setTimeout(()=>{loadMileageRate();if(document.body?.dataset?.adminPage==='settings'){loadSecurityMentors();loadSecuritySettings();}},120);
+
+/* =========================
+   ADMIN MESSAGE CATEGORIES — FINAL UI OVERRIDE
+========================= */
+renderAdminMessages = async function(){
+  const c=document.getElementById('adminMessages');
+  if(!c)return;
+  await cleanupExpiredMessages();
+  const {data,error}=await db.from('messages').select('*').order('created_at',{ascending:true});
+  if(error){c.innerHTML='<p>Unable to load messages.</p>';return;}
+
+  const relevant=(data||[]).filter(m=>[
+    'parent_admin','mentor_admin','admin_mentor','booking_admin_parent','booking_admin_mentor'
+  ].includes(m.thread_type));
+  const bookingIds=[...new Set(relevant.filter(m=>m.booking_id).map(m=>m.booking_id))];
+  const bookingMap={};
+  if(bookingIds.length){
+    const {data:b}=await db.from('bookings').select('*').in('id',bookingIds);
+    (b||[]).forEach(x=>bookingMap[x.id]=x);
+  }
+
+  const makeGroups=(rows,kind)=>{
+    const groups={};
+    rows.forEach(m=>{
+      let key;
+      if(kind==='booking-parent') key=`booking-parent:${m.booking_id}`;
+      else if(kind==='booking-mentor') key=`booking-mentor:${m.booking_id}`;
+      else if(kind==='parent') key=`parent:${m.parent_email||m.sender_name||'unknown'}`;
+      else key=`mentor:${m.mentor||m.sender_name||'unknown'}`;
+      (groups[key]??=[]).push(m);
+    });
+    return groups;
+  };
+
+  const bookedGroups={
+    ...makeGroups(relevant.filter(m=>m.thread_type==='booking_admin_parent'),'booking-parent'),
+    ...makeGroups(relevant.filter(m=>m.thread_type==='booking_admin_mentor'),'booking-mentor')
+  };
+  const mentorGroups=makeGroups(relevant.filter(m=>m.thread_type==='mentor_admin'||m.thread_type==='admin_mentor'),'mentor');
+  const parentGroups=makeGroups(relevant.filter(m=>m.thread_type==='parent_admin'),'parent');
+
+  const renderThread=(key,arr)=>{
+    const last=arr[arr.length-1];
+    const booking=last.booking_id?bookingMap[last.booking_id]:null;
+    let label='';
+    if(key.startsWith('booking-parent:')) label=`${booking?.booking_ref||'Booking'} — Parent: ${booking?.parent||last.parent_email||'Parent'}`;
+    else if(key.startsWith('booking-mentor:')) label=`${booking?.booking_ref||'Booking'} — Mentor: ${booking?.mentor||last.mentor||'Mentor'}`;
+    else if(key.startsWith('parent:')) label=arr.find(x=>x.sender_role==='parent')?.sender_name||last.parent_email||'Parent / Member';
+    else label=last.mentor||arr.find(x=>x.sender_role==='mentor')?.sender_name||'Mentor';
+    const unread=arr.some(x=>x.recipient==='admin'&&!x.is_read);
+    return `<div class="chat-thread ${unread?'unread-card':''}">
+      <h3>${escapeHtml(label)} ${unread?'<span class="unread-pill">UNREAD</span>':''}</h3>
+      ${booking?`<p class="small-muted">${formatDisplayDate(booking.date)} at ${escapeHtml(booking.time||'')} • ${escapeHtml(booking.location||'')}</p>`:''}
+      <div class="chat-list">${arr.map(m=>`<div class="chat-bubble ${m.sender_role==='admin'?'chat-mine':'chat-other'}"><strong>${escapeHtml(m.sender_name||m.sender_role)}</strong><p>${escapeHtml(m.message||'')}</p><span>${messageDateTime(m.created_at)}</span></div>`).join('')}</div>
+      <textarea id="adminThread-${last.id}" class="mentor-textarea" placeholder="Reply"></textarea>
+      <button onclick="replyAdminThreadFinal('${last.id}')">SEND REPLY</button>
+      <button class="secondary danger-btn" onclick="deleteAdminThreadFinal('${key}')">DELETE CHAT</button>
+    </div>`;
+  };
+
+  const category=(title,groups)=>{
+    const entries=Object.entries(groups);
+    return `<section class="admin-message-category"><h2>${title}<span class="category-count">${entries.length}</span></h2>${entries.map(([k,a])=>renderThread(k,a)).join('')||'<p>No messages in this section.</p>'}</section>`;
+  };
+
+  c.innerHTML=`<div class="message-safety-note">Messages are automatically removed after 14 days.</div>
+    ${category('Booked Session Messages',bookedGroups)}
+    ${category('Mentor Messages',mentorGroups)}
+    ${category('Parent / Member Messages',parentGroups)}`;
+
+  const unreadIds=relevant.filter(m=>m.recipient==='admin'&&!m.is_read).map(m=>m.id);
+  if(unreadIds.length)await db.from('messages').update({is_read:true}).in('id',unreadIds);
+  await loadDashboard();
+};
