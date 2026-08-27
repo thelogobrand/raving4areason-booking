@@ -1,193 +1,34 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Mentor Portal</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="styles.css">
-  <link rel="manifest" href="/manifest.json">
-  <link rel="apple-touch-icon" href="/images/bookapp-icon.png">
-  <meta name="theme-color" content="#000000">
+  <meta charset="UTF-8"><title>R4AR Mentor</title><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="styles.css"><link rel="manifest" href="/manifest.json"><meta name="theme-color" content="#ffffff">
 </head>
-<body>
-  <div class="logo-wrap">
-    <img src="r4ar.png" alt="Raving 4 A Reason" class="logo">
-  </div>
-
-  <div class="container mentor-container">
-    <div id="mentorLoginBox">
-      <h1>Mentor Login</h1>
-      <input type="text" id="mentorUsername" placeholder="Mentor Name" autocomplete="username">
-      <input type="password" id="mentorPassword" placeholder="Password" autocomplete="current-password">
-      <button onclick="loginMentor()">LOGIN</button>
+<body class="v4-body mentor-v4">
+<header class="v4-header"><a href="index.html"><img src="images/r4arblk.png" alt="Raving 4 A Reason" class="v4-logo"></a><div class="v4-header-actions"><button class="v4-icon-btn" type="button" onclick="toggleSection('mentorMessagesSection')">✉️<span id="mentorMessageBadge" class="v4-badge"></span></button><button class="v4-profile-btn" type="button" onclick="openMentorProfile()">👤</button></div></header>
+<main class="v4-shell mentor-container">
+  <section id="mentorLoginBox" class="v4-login-card"><p class="v4-eyebrow">MENTOR</p><h1>Mentor sign in</h1><label class="v4-field-label" for="mentorUsername">Mentor name</label><input type="text" id="mentorUsername" placeholder="Mentor name" autocomplete="username"><label class="v4-field-label" for="mentorPassword">Password</label><input type="password" id="mentorPassword" placeholder="Password" autocomplete="current-password"><button onclick="loginMentor()" class="v4-primary-btn">SIGN IN</button><a href="index.html" class="v4-back-link">← Back to main sign in</a></section>
+  <section id="mentorPanel" style="display:none" class="v4-dashboard">
+    <div class="v4-mentor-top"><button id="mentorAvatarButton" class="mentor-avatar-button v4-mentor-avatar" type="button" onclick="openMentorProfile()"><img id="mentorAvatarImage" class="mentor-avatar-image" alt="Mentor profile"><span id="mentorAvatarInitials" class="mentor-avatar-initials">M</span></button><div><p id="mentorToday" class="v4-muted"></p><h1 id="mentorWelcome">Welcome</h1><p class="v4-muted">Manage your R4AR schedule and expenses.</p></div></div>
+    <div id="mentorSummary" class="v4-stat-grid"></div><div id="mentorNextBooking"></div>
+    <div class="v4-mentor-main-grid">
+      <button class="v4-action-tile" onclick="toggleSection('addAvailabilitySection')"><span>📅</span><strong>Booking Requests</strong><small>Add / manage availability</small></button>
+      <button class="v4-action-tile" onclick="toggleSection('mentorBookedSection')"><span>🎟️</span><strong>My Bookings</strong><small>Confirmed sessions</small></button>
+      <button class="v4-action-tile" onclick="toggleSection('mentorExpensesSection')"><span>💷</span><strong>My Expenses</strong><small>Submit & track claims</small></button>
     </div>
 
-    <div id="mentorPanel" style="display:none;">
-      <div class="mentor-hero">
-        <div class="mentor-hero-actions">
-          <button id="mentorAvatarButton" class="mentor-avatar-button" type="button" onclick="openMentorProfile()" aria-label="Open profile">
-            <img id="mentorAvatarImage" class="mentor-avatar-image" alt="Mentor profile">
-            <span id="mentorAvatarInitials" class="mentor-avatar-initials">M</span>
-          </button>
-          <a href="mentor-messages.html" class="mentor-envelope-button" aria-label="Open messages">
-            <span aria-hidden="true">✉️</span>
-            <span id="mentorMessageBadge" class="mentor-message-badge"></span>
-          </a>
-        </div>
-        <p id="mentorToday" class="mentor-date"></p>
-        <h1 id="mentorWelcome">Welcome 👋</h1>
-        <p class="mentor-summary-intro">You currently have:</p>
-        <div id="mentorSummary" class="mentor-summary"></div>
-      </div>
-
-      <div id="mentorNextBooking"></div>
-
-      <button onclick="toggleSection('addAvailabilitySection')" class="mentor-menu-btn">➕ ADD AVAILABILITY</button>
-      <section id="addAvailabilitySection" class="mentor-section" style="display:none;">
-        <h2>Add Availability</h2>
-        <label class="field-label" for="mentorDate">Date</label>
-        <input type="date" id="mentorDate">
-
-        <label class="field-label" for="mentorTypeSelect">Type</label>
-        <select id="mentorTypeSelect">
-          <option value="DJ">DJ</option>
-          <option value="MC">MC</option>
-          <option value="Production">Production</option>
-        </select>
-
-        <label class="field-label" for="mentorLocationSelect">Location</label>
-        <select id="mentorLocationSelect">
-          <option value="">Select location</option>
-        </select>
-
-        <label class="field-label">Select one or more times</label>
-        <div id="mentorTimeButtons" class="time-grid"></div>
-
-        <button id="addMentorSessionsBtn" onclick="addMentorAvailability()">ADD SESSIONS</button>
-      </section>
-
-      <button onclick="toggleSection('mentorAvailabilitySection')" class="mentor-menu-btn">📅 MY AVAILABILITY</button>
-      <section id="mentorAvailabilitySection" class="mentor-section" style="display:none;">
-        <div id="mentorAvailabilityList"></div>
-      </section>
-
-      <button onclick="toggleSection('mentorBookedSection')" class="mentor-menu-btn">👥 MY BOOKED SESSIONS</button>
-      <section id="mentorBookedSection" class="mentor-section" style="display:none;">
-        <div id="mentorBookedSessions"></div>
-      </section>
-
-      <button onclick="toggleSection('mentorNewsletterSection')" class="mentor-menu-btn">📰 NEWS &amp; EVENTS</button>
-      <section id="mentorNewsletterSection" class="mentor-section" style="display:none;">
-        <div id="mentorNewsletter"></div>
-      </section>
-
-      <button onclick="toggleSection('mentorExpensesSection')" class="mentor-menu-btn">💷 EXPENSES</button>
-      <section id="mentorExpensesSection" class="mentor-section" style="display:none;">
-        <h2>Submit Expense</h2>
-
-        <label class="field-label" for="expenseType">Expense Type</label>
-        <select id="expenseType" onchange="updateExpenseFields()">
-          <option value="mileage">Mileage Claim</option>
-          <option value="receipt">Receipt / Other Expense</option>
-        </select>
-
-        <label class="field-label" for="expenseDate">Date</label>
-        <input type="date" id="expenseDate">
-
-        <div id="mileageFields">
-          <input type="number" id="expenseMiles" min="0" step="0.1" placeholder="Miles travelled" oninput="updateMileageAmount()">
-          <div class="mileage-summary">
-            <p>Rate: <strong>£0.45 per mile</strong></p>
-            <p>Claim amount: <strong id="mileageClaimAmount">£0.00</strong></p>
-          </div>
-        </div>
-
-        <div id="receiptFields" style="display:none;">
-          <input type="number" id="expenseAmount" min="0" step="0.01" placeholder="Amount (£)">
-          <select id="expenseCategory">
-            <option value="Fuel">Fuel</option>
-            <option value="Parking">Parking</option>
-            <option value="Food">Food</option>
-            <option value="Equipment">Equipment</option>
-            <option value="Other">Other</option>
-          </select>
-          <label class="field-label" for="expenseReceipt">Upload receipt (optional)</label>
-          <input type="file" id="expenseReceipt" accept="image/*,.pdf">
-        </div>
-
-        <textarea id="expenseReason" class="mentor-textarea" placeholder="Reason / details"></textarea>
-        <button onclick="submitMentorExpense()">SUBMIT EXPENSE</button>
-
-        <h2>My Expense Claims</h2>
-        <div id="mentorExpenseList"></div>
-      </section>
-
-      <section id="mentorProfileSection" class="mentor-section mentor-profile-section" style="display:none;">
-        <div class="profile-header-row">
-          <h2>My Profile</h2>
-          <button type="button" class="profile-close-btn" onclick="openMentorProfile()" aria-label="Close profile">×</button>
-        </div>
-
-        <div class="profile-photo-editor">
-          <button type="button" class="profile-photo-large" onclick="openProfilePhotoMenu()" aria-label="Change profile photo">
-            <img id="mentorProfilePreview" alt="">
-            <span class="profile-camera-badge">📷</span>
-          </button>
-          <p class="small-muted">Tap the photo to change it</p>
-          <input type="file" id="mentorCameraInput" accept="image/*" capture="user" hidden style="display:none" onchange="handleMentorPhotoSelected(this)">
-          <input type="file" id="mentorGalleryInput" accept="image/*" hidden style="display:none" onchange="handleMentorPhotoSelected(this)">
-        </div>
-
-        <label class="field-label" for="profileName">Name</label>
-        <input type="text" id="profileName" placeholder="Name" readonly>
-
-        <label class="field-label" for="profileArtistName">Artist Name</label>
-        <input type="text" id="profileArtistName" placeholder="Artist name" readonly>
-
-        <label class="field-label" for="profileEmail">Email</label>
-        <input type="email" id="profileEmail" placeholder="Email address">
-
-        <label class="field-label" for="profileDefaultType">Default Type</label>
-        <select id="profileDefaultType" disabled>
-          <option value="DJ">DJ</option>
-          <option value="MC">MC</option>
-          <option value="Production">Production</option>
-        </select>
-
-        <label class="field-label" for="profileDefaultLocation">Default Location</label>
-        <select id="profileDefaultLocation" disabled>
-          <option value="">Select location</option>
-        </select>
-
-        <div class="profile-divider"></div>
-        <h2>Change Password</h2>
-        <input type="password" id="mentorCurrentPassword" placeholder="Current password" autocomplete="current-password">
-        <input type="password" id="mentorNewPassword" placeholder="New password" autocomplete="new-password">
-        <input type="password" id="mentorConfirmPassword" placeholder="Confirm new password" autocomplete="new-password">
-
-        <button type="button" onclick="saveMentorProfile()">SAVE</button>
-      </section>
-
-      <div id="profilePhotoSheet" class="profile-photo-sheet" onclick="closeProfilePhotoMenu(event)">
-        <div class="profile-photo-sheet-panel">
-          <h2>Profile Photo</h2>
-          <button type="button" class="secondary" onclick="chooseMentorPhoto('camera')">📷 TAKE PHOTO</button>
-          <button type="button" class="secondary" onclick="chooseMentorPhoto('gallery')">🖼️ CHOOSE FROM GALLERY</button>
-          <button type="button" class="danger-btn" onclick="removeMentorProfilePhoto()">🗑️ REMOVE PHOTO</button>
-        </div>
-      </div>
-
-      <div class="logout-section">
-        <div class="logout-divider"></div>
-        <button onclick="logoutMentor()" class="logout-btn">LOG OUT</button>
-      </div>
-    </div>
-  </div>
-
-  <footer>Raving 4 A Reason | C.I.C REG 16251433</footer>
-
-  <script src="data.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="app.js"></script>
-</body>
-</html>
+    <section id="addAvailabilitySection" class="mentor-section v4-panel" style="display:none"><div class="v4-section-heading"><div><span class="v4-kicker">AVAILABILITY</span><h2>Add availability</h2></div></div><label class="v4-field-label" for="mentorDate">Date</label><input type="date" id="mentorDate"><label class="v4-field-label" for="mentorTypeSelect">Type</label><select id="mentorTypeSelect"><option value="DJ">DJ</option><option value="MC">MC</option><option value="Production">Production</option></select><label class="v4-field-label" for="mentorLocationSelect">Location</label><select id="mentorLocationSelect"><option value="">Select location</option></select><label class="v4-field-label">Select one or more times</label><div id="mentorTimeButtons" class="time-grid"></div><button id="addMentorSessionsBtn" onclick="addMentorAvailability()" class="v4-primary-btn">ADD SESSIONS</button></section>
+    <section id="mentorAvailabilitySection" class="mentor-section v4-panel" style="display:none"><h2>My Availability</h2><div id="mentorAvailabilityList"></div></section>
+    <section id="mentorBookedSection" class="mentor-section v4-panel" style="display:none"><h2>My Bookings</h2><div id="mentorBookedSessions"></div></section>
+    <section id="mentorMessagesSection" class="mentor-section v4-panel" style="display:none"><h2>Messages</h2><div id="mentorMessages"></div></section>
+    <section id="mentorNewsletterSection" class="mentor-section v4-panel" style="display:none"><h2>News & Events</h2><div id="mentorNewsletter"></div></section>
+    <section id="mentorExpensesSection" class="mentor-section v4-panel" style="display:none"><h2>My Expenses</h2><label class="v4-field-label" for="expenseType">Expense type</label><select id="expenseType" onchange="updateExpenseFields()"><option value="mileage">Mileage Claim</option><option value="receipt">Receipt / Other Expense</option></select><label class="v4-field-label" for="expenseDate">Date</label><input type="date" id="expenseDate"><div id="mileageFields"><input type="number" id="expenseMiles" min="0" step="0.1" placeholder="Miles travelled"><input type="number" id="expenseMileageAmount" min="0" step="0.01" placeholder="Claim amount (£)"></div><div id="receiptFields" style="display:none"><input type="number" id="expenseAmount" min="0" step="0.01" placeholder="Amount (£)"><select id="expenseCategory"><option value="Fuel">Fuel</option><option value="Parking">Parking</option><option value="Food">Food</option><option value="Equipment">Equipment</option><option value="Other">Other</option></select><label class="v4-field-label" for="expenseReceipt">Upload receipt (optional)</label><input type="file" id="expenseReceipt" accept="image/*,.pdf"></div><textarea id="expenseReason" class="mentor-textarea" placeholder="Reason / details"></textarea><button onclick="submitMentorExpense()" class="v4-primary-btn">SUBMIT EXPENSE</button><h3>My Expense Claims</h3><div id="mentorExpenseList"></div></section>
+    <section id="mentorProfileSection" class="mentor-section v4-panel" style="display:none"><div class="profile-header-row"><h2>My Profile</h2><button type="button" class="profile-close-btn" onclick="openMentorProfile()">×</button></div><label class="v4-field-label" for="mentorProfileImageInput">Profile image</label><input type="file" id="mentorProfileImageInput" accept="image/*"><button type="button" class="v4-outline-btn" onclick="uploadMentorProfileImage()">UPLOAD / CHANGE IMAGE</button><label class="v4-field-label" for="profileName">Name</label><input type="text" id="profileName"><label class="v4-field-label" for="profileArtistName">Artist Name</label><input type="text" id="profileArtistName"><label class="v4-field-label" for="profileEmail">Email</label><input type="email" id="profileEmail"><label class="v4-field-label" for="profileDefaultType">Default Type</label><select id="profileDefaultType"><option value="DJ">DJ</option><option value="MC">MC</option><option value="Production">Production</option></select><label class="v4-field-label" for="profileDefaultLocation">Default Location</label><select id="profileDefaultLocation"><option value="">Select location</option></select><button type="button" onclick="saveMentorProfile()" class="v4-primary-btn">SAVE PROFILE</button><div class="profile-divider"></div><h2>Change Password</h2><input type="password" id="mentorCurrentPassword" placeholder="Current password"><input type="password" id="mentorNewPassword" placeholder="New password"><input type="password" id="mentorConfirmPassword" placeholder="Confirm new password"><button type="button" class="v4-outline-btn" onclick="changeMentorPassword()">CHANGE PASSWORD</button></section>
+    <button onclick="logoutMentor()" class="v4-logout-link">Log out</button>
+  </section>
+</main>
+<nav id="mentorBottomNav" class="v4-bottom-nav mentor-bottom" style="display:none"><button onclick="toggleSection('addAvailabilitySection')"><span>📅</span><small>Requests</small></button><button onclick="toggleSection('mentorBookedSection')"><span>🎟️</span><small>Bookings</small></button><button onclick="toggleSection('mentorExpensesSection')"><span>💷</span><small>Expenses</small></button><button onclick="toggleSection('mentorNewsletterSection')"><span>📰</span><small>News</small></button></nav>
+<footer class="v4-footer">Raving 4 A Reason CIC · C.I.C REG 16251433</footer>
+<script src="data.js"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="app.js"></script>
+<script>const _smp=window.showMentorPanel;if(_smp)window.showMentorPanel=async function(){await _smp();const n=document.getElementById('mentorBottomNav');if(n)n.style.display='grid'};const _lm=window.logoutMentor;if(_lm)window.logoutMentor=function(){const n=document.getElementById('mentorBottomNav');if(n)n.style.display='none';_lm()};</script>
+</body></html>

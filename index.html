@@ -2,47 +2,79 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Raving 4 A Reason Parent Portal</title>
+  <title>Raving 4 A Reason</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="stylesheet" href="styles.css">
   <link rel="manifest" href="/manifest.json">
   <link rel="apple-touch-icon" href="/images/bookapp-icon.png">
-  <meta name="theme-color" content="#000000">
+  <meta name="theme-color" content="#ffffff">
 </head>
-<body>
-  <div class="logo-wrap"><img src="r4ar.png" alt="Raving 4 A Reason" class="logo"></div>
-  <div class="container">
-    <div id="parentLoginBox">
-      <h1>Parent Portal</h1>
-      <input type="text" id="parentUsername" value="R4ARparent" readonly aria-label="Parent username">
-      <input type="password" id="parentPassword" placeholder="Password" autocomplete="current-password">
-      <button onclick="loginParent()">LOGIN</button>
-    </div>
+<body class="v4-body parent-v4">
+  <header class="v4-header">
+    <img src="images/r4arblk.png" alt="Raving 4 A Reason" class="v4-logo">
+    <button class="v4-profile-btn" type="button" aria-label="Profile">👤</button>
+  </header>
 
-    <div id="parentMenu" style="display:none;">
-      <h1>Parent Portal</h1>
-      <button onclick="goToBooking()">BOOK A SESSION</button>
-      <button onclick="goToCalendar()" class="secondary">AVAILABLE SESSIONS</button>
-      <button onclick="goToNewsletter()" class="secondary">NEWS & EVENTS</button>
+  <main class="v4-shell v4-parent-shell">
+    <section id="parentLoginBox" class="v4-login-card">
+      <p class="v4-eyebrow">RAVING 4 A REASON</p>
+      <h1>Sign in</h1>
+      <p class="v4-muted">Parent / Member access</p>
+      <input type="text" id="parentUsername" value="R4ARparent" readonly aria-label="Parent username" class="v4-hidden-user">
+      <label class="v4-field-label" for="parentPassword">Password</label>
+      <input type="password" id="parentPassword" placeholder="Enter password" autocomplete="current-password">
+      <button onclick="loginParent()" class="v4-primary-btn">SIGN IN</button>
+      <button type="button" class="v4-text-btn" onclick="alert('Parent account sign-up will be introduced in the next V4 stage.')">Sign Up</button>
+      <div class="v4-role-links"><a href="admin.html">Admin</a><span>|</span><a href="mentor.html">Mentor</a></div>
+    </section>
 
-      <div class="parent-secondary-actions">
-        <button onclick="toggleParentContact()" class="footer-action-btn">CONTACT US</button>
-        <button onclick="openDonationPage()" class="footer-action-btn donation-btn">❤️ MAKE A DONATION</button>
+    <section id="parentMenu" style="display:none;" class="v4-dashboard">
+      <div class="v4-welcome-card v4-parent-hero">
+        <div>
+          <p class="v4-eyebrow">PARENT / MEMBER</p>
+          <h1>Welcome to R4AR</h1>
+          <p>Book sessions, manage your journey and keep up with Raving 4 A Reason.</p>
+        </div>
       </div>
 
-      <section id="parentContactSection" class="parent-contact-panel" style="display:none;">
-        <h2>Contact Us</h2>
-        <p class="small-muted">Need help with a booking or have a question?</p>
-        <a class="contact-email-button" href="mailto:Raving4areason1@outlook.com">✉️ Raving4areason1@outlook.com</a>
-        <button onclick="goToParentAdminChat()" class="secondary">💬 MESSAGE ADMIN</button>
+      <section class="v4-feature-card v4-book-card">
+        <div class="v4-feature-icon">🎧</div>
+        <div class="v4-feature-copy"><span class="v4-kicker">SESSIONS</span><h2>Book a Session</h2><p>See all upcoming DJ, MC and Production availability in one place.</p></div>
+        <button onclick="goToBooking()" class="v4-primary-btn">VIEW AVAILABLE SESSIONS</button>
       </section>
 
-      <button onclick="logoutParent()" class="logout-btn">LOG OUT</button>
-    </div>
-  </div>
-  <footer>Raving 4 A Reason CIC | C.I.C REG 16251433</footer>
+      <div class="v4-card-grid">
+        <button class="v4-small-card" onclick="goToBooking()"><span>📖</span><strong>My Bookings</strong><small>Upcoming & recent</small></button>
+        <button class="v4-small-card" onclick="goToNewsletter()"><span>📰</span><strong>News & Events</strong><small>Latest updates</small></button>
+        <button class="v4-small-card" onclick="goToContact()"><span>✉️</span><strong>Contact Us</strong><small>Get in touch</small></button>
+        <button class="v4-small-card" onclick="openDonationPage()"><span>❤️</span><strong>Make a Donation</strong><small>Support R4AR</small></button>
+      </div>
+
+      <section class="v4-membership-teaser">
+        <div><span class="v4-kicker">MEMBERSHIP</span><h2>Become a Member</h2><p>Monthly £15 • Yearly £150</p></div>
+        <button type="button" class="v4-outline-btn" onclick="alert('Membership launches in a later V4 stage.')">EXPLORE MEMBERSHIP</button>
+      </section>
+
+      <button onclick="logoutParent()" class="v4-logout-link">Log out</button>
+    </section>
+  </main>
+
+  <nav id="parentBottomNav" class="v4-bottom-nav" style="display:none;">
+    <button onclick="goToBooking()"><span>📖</span><small>Bookings</small></button>
+    <button onclick="goToNewsletter()"><span>📰</span><small>News</small></button>
+    <button onclick="goToContact()"><span>✉️</span><small>Contact</small></button>
+    <button onclick="openDonationPage()"><span>❤️</span><small>Donate</small></button>
+  </nav>
+
+  <footer class="v4-footer">Raving 4 A Reason CIC · C.I.C REG 16251433</footer>
   <script src="data.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="app.js"></script>
+  <script>
+    const originalShowParentMenu = window.showParentMenu;
+    if (originalShowParentMenu) window.showParentMenu = function(){ originalShowParentMenu(); const n=document.getElementById('parentBottomNav'); if(n)n.style.display='grid'; };
+    const originalLogoutParent = window.logoutParent;
+    if (originalLogoutParent) window.logoutParent = function(){ const n=document.getElementById('parentBottomNav'); if(n)n.style.display='none'; originalLogoutParent(); };
+  </script>
 </body>
 </html>
